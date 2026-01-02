@@ -68,7 +68,9 @@ batch_output/
 *.txt
 *.md
 !README.md
-!.claude/*.md
+
+# Claude Code settings
+.claude/
 
 # Logs
 *.log
