@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pdfkit:*)",
+      "Bash(python3:*)",
+      "Bash(pip3:*)",
+      "Bash(cat:*)",
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(if grep -q \"print_warning\" \"$f\")",
+      "Bash(then)",
+      "Bash(if ! grep:*)",
+      "Bash(fi:*)",
+      "Bash(done)",
+      "Bash(pdfkit:*)",
+      "Bash(echo:*)",
+      "Bash(export:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  },
+  "outputStyle": "default"
+}
