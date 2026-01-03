@@ -242,6 +242,9 @@ def recognize(
         print_error(f"文件不存在或不是有效的 PDF: {file}")
         raise typer.Exit(1)
 
+    if not require_unlocked_pdf(file, "OCR 识别"):
+        raise typer.Exit(1)
+
     try:
         # 初始化 OCR 处理器
         ocr = QwenVLOCR(api_key=api_key, model=model, region=region)

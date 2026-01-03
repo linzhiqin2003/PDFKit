@@ -52,6 +52,9 @@ def pages(
         print_error(f"文件不存在或不是有效的 PDF: {file}")
         raise typer.Exit(1)
 
+    if not require_unlocked_pdf(file, "删除页面"):
+        raise typer.Exit(1)
+
     try:
         doc = fitz.open(file)
         total_pages = doc.page_count
