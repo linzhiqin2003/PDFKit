@@ -110,7 +110,7 @@ watermark:
 
 ```bash
 # 克隆项目
-git clone https://github.com/your/pdfkit
+git clone https://github.com/linzhiqin2003/pdfkit
 cd pdfkit
 
 # 开发模式安装
@@ -118,11 +118,75 @@ pip install -e ".[dev]"
 
 # 运行测试
 pytest
-
-# 代码格式化
-black pdfkit
-ruff check pdfkit
 ```
+
+---
+
+## MCP 服务器
+
+PDFKit 还提供了 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 服务器，可以与 AI 助手（如 Claude Desktop）集成，提供强大的 PDF 处理能力。
+
+### 功能特性
+
+- **41 个 MCP 工具** - 覆盖所有 PDF 操作场景
+- **完整功能对齐** - 与 CLI 命令功能 100% 对齐
+- **异步支持** - 支持异步 OCR 处理，提高大文件处理效率
+- **错误处理** - 友好的错误提示和解决建议
+
+### 工具分类
+
+| 分类 | 工具数 | 功能 |
+|------|--------|------|
+| 信息查看 | 3 | 获取 PDF 信息、页数、元数据 |
+| 页面操作 | 8 | 合并、拆分、提取页面/文本/图片 |
+| 转换操作 | 9 | PDF 与图片/Word/HTML/Markdown/网页互转 |
+| 编辑操作 | 5 | 添加水印、页眉页脚、裁剪、调整大小 |
+| 安全操作 | 4 | 加密、解密、权限设置、清除元数据 |
+| 优化操作 | 3 | 压缩、优化图片、修复 PDF |
+| OCR 操作 | 3 | 文字识别、表格提取、版面分析 |
+
+### 配置 Claude Desktop
+
+在 Claude Desktop 配置文件中添加：
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "pdfkit": {
+      "command": "/path/to/your/pdfkit-env/bin/pdfkit-mcp",
+      "env": {
+        "DASHSCOPE_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+> **注意**: `command` 需要指向 `pdfkit-mcp` 的完整路径。可通过 `which pdfkit-mcp` 查找。
+
+### 使用示例
+
+配置完成后，可以在 Claude Desktop 中直接使用自然语言操作 PDF：
+
+```
+用户: 请读取 document.pdf 的信息
+Claude: 好的，让我读取这个 PDF 文件... [调用 pdfkit_get_info]
+
+用户: 将 document.pdf 的第 1-5 页提取到一个新文件
+Claude: 我来帮您提取页面... [调用 pdfkit_extract_pages]
+
+用户: 压缩这个 PDF 文件
+Claude: 我来压缩文件... [调用 pdfkit_compress_pdf]
+```
+
+### 详细文档
+
+完整的 MCP 工具参考文档请参阅：[MCP 工具参考文档](docs/mcp_tools_reference.md)
+
+---
 
 ## 许可证
 

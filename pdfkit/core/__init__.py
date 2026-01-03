@@ -1,1 +1,225 @@
-"""PDFKit 核心功能模块"""
+"""PDFKit 核心功能模块
+
+此包包含可被 CLI 和 MCP 共同调用的核心业务逻辑。
+"""
+
+from .pdf_info import (
+    PDFInfo,
+    PDFInfoError,
+    PDFEncryptedError,
+    PDFNotFoundError,
+    get_pdf_info,
+    get_page_count,
+    get_metadata,
+)
+
+from .pdf_merge import (
+    MergeResult,
+    PDFMergeError,
+    NoValidFilesError,
+    MergeFailedError,
+    merge_files,
+    merge_directory,
+    interleave_files,
+    merge_files_with_pikepdf,
+    repair_pdf_with_pikepdf,
+)
+
+from .pdf_split import (
+    SplitResult,
+    ChunkResult,
+    PDFSplitError,
+    InvalidPageRangeError,
+    split_by_pages,
+    split_by_chunks,
+    split_single_pages,
+    split_by_count,
+    split_by_size,
+    parse_page_range,
+    parse_chunks,
+)
+
+from .pdf_extract import (
+    ExtractPagesResult,
+    ExtractTextResult,
+    ExtractImagesResult,
+    ExtractedImageInfo,
+    PDFExtractError,
+    extract_pages,
+    extract_text,
+    extract_images,
+    extract_all_text,
+)
+
+from .pdf_convert import (
+    ConvertToImagesResult,
+    ImagesToPDFResult,
+    ConvertToWordResult,
+    ConvertToHTMLResult,
+    ConvertToMarkdownResult,
+    HTMLToPDFResult,
+    URLToPDFResult,
+    PDFConvertError,
+    UnsupportedFormatError,
+    DependencyNotFoundError,
+    EncryptedPDFError as ConvertEncryptedPDFError,
+    pdf_to_images,
+    images_to_pdf,
+    pdf_to_word,
+    pdf_to_html,
+    pdf_to_markdown,
+    html_to_pdf,
+    url_to_pdf,
+)
+
+from .pdf_edit import (
+    WatermarkResult,
+    CropResult,
+    ResizeResult,
+    PDFEditError,
+    EncryptedPDFError as EditEncryptedPDFError,
+    InvalidParameterError,
+    add_watermark,
+    crop_pages,
+    resize_pages,
+)
+
+from .pdf_header import (
+    HeaderResult,
+    FooterResult,
+    PDFHeaderError,
+    EncryptedPDFError as HeaderEncryptedPDFError,
+    InvalidParameterError as HeaderInvalidParameterError,
+    add_header,
+    add_footer,
+)
+
+from .pdf_security import (
+    EncryptResult,
+    DecryptResult,
+    ProtectResult,
+    CleanMetadataResult,
+    PDFSecurityError,
+    PasswordError,
+    EncryptedPDFError as SecurityEncryptedPDFError,
+    encrypt_pdf,
+    decrypt_pdf,
+    protect_pdf,
+    clean_metadata,
+)
+
+from .pdf_optimize import (
+    CompressResult,
+    OptimizeImagesResult,
+    RepairResult,
+    PDFOptimizeError,
+    InvalidParameterError as OptimizeInvalidParameterError,
+    EncryptedPDFError as OptimizeEncryptedPDFError,
+    RepairFailedError,
+    compress_pdf,
+    optimize_images,
+    repair_pdf,
+)
+
+__all__ = [
+    # PDF 信息
+    "PDFInfo",
+    "PDFInfoError",
+    "PDFEncryptedError",
+    "PDFNotFoundError",
+    "get_pdf_info",
+    "get_page_count",
+    "get_metadata",
+    # PDF 合并
+    "MergeResult",
+    "PDFMergeError",
+    "NoValidFilesError",
+    "MergeFailedError",
+    "merge_files",
+    "merge_directory",
+    "interleave_files",
+    "merge_files_with_pikepdf",
+    "repair_pdf_with_pikepdf",
+    # PDF 拆分
+    "SplitResult",
+    "ChunkResult",
+    "PDFSplitError",
+    "InvalidPageRangeError",
+    "split_by_pages",
+    "split_by_chunks",
+    "split_single_pages",
+    "split_by_count",
+    "split_by_size",
+    "parse_page_range",
+    "parse_chunks",
+    # PDF 提取
+    "ExtractPagesResult",
+    "ExtractTextResult",
+    "ExtractImagesResult",
+    "ExtractedImageInfo",
+    "PDFExtractError",
+    "extract_pages",
+    "extract_text",
+    "extract_images",
+    "extract_all_text",
+    # PDF 转换
+    "ConvertToImagesResult",
+    "ImagesToPDFResult",
+    "ConvertToWordResult",
+    "ConvertToHTMLResult",
+    "ConvertToMarkdownResult",
+    "HTMLToPDFResult",
+    "URLToPDFResult",
+    "PDFConvertError",
+    "UnsupportedFormatError",
+    "DependencyNotFoundError",
+    "ConvertEncryptedPDFError",
+    "pdf_to_images",
+    "images_to_pdf",
+    "pdf_to_word",
+    "pdf_to_html",
+    "pdf_to_markdown",
+    "html_to_pdf",
+    "url_to_pdf",
+    # PDF 编辑
+    "WatermarkResult",
+    "CropResult",
+    "ResizeResult",
+    "PDFEditError",
+    "EditEncryptedPDFError",
+    "InvalidParameterError",
+    "add_watermark",
+    "crop_pages",
+    "resize_pages",
+    # PDF 页眉页脚
+    "HeaderResult",
+    "FooterResult",
+    "PDFHeaderError",
+    "HeaderEncryptedPDFError",
+    "HeaderInvalidParameterError",
+    "add_header",
+    "add_footer",
+    # PDF 安全
+    "EncryptResult",
+    "DecryptResult",
+    "ProtectResult",
+    "CleanMetadataResult",
+    "PDFSecurityError",
+    "PasswordError",
+    "SecurityEncryptedPDFError",
+    "encrypt_pdf",
+    "decrypt_pdf",
+    "protect_pdf",
+    "clean_metadata",
+    # PDF 优化
+    "CompressResult",
+    "OptimizeImagesResult",
+    "RepairResult",
+    "PDFOptimizeError",
+    "OptimizeInvalidParameterError",
+    "OptimizeEncryptedPDFError",
+    "RepairFailedError",
+    "compress_pdf",
+    "optimize_images",
+    "repair_pdf",
+]

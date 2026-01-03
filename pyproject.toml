@@ -40,12 +40,17 @@ dependencies = [
 
     # 转换
     "python-docx>=1.0.0",
-    "pdfkit>=1.0.0",
+    "weasyprint>=60.0",  # HTML 转 PDF（替代 pdfkit 避免命名冲突）
     "playwright>=1.40.0",
 
     # CLI 框架
     "typer>=0.9.0",
     "rich>=13.0.0",
+
+    # MCP 服务器
+    "mcp>=1.0.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.25.0",
 
     # 其他
     "tqdm>=4.65.0",
@@ -65,6 +70,7 @@ dev = [
 [project.scripts]
 pdfkit = "pdfkit.__main__:main"
 pdfkit-cli = "pdfkit.__main__:main"
+pdfkit-mcp = "pdfkit.mcp.server:main"
 
 [project.urls]
 Homepage = "https://github.com/your/pdfkit"

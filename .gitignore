@@ -48,6 +48,8 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*-env/
+pdfkit-env/
 
 # IDE
 .vscode/
@@ -68,9 +70,15 @@ batch_output/
 *.txt
 *.md
 !README.md
+!docs/*.md
+!.claude/CLAUDE.md
 
-# Claude Code settings
-.claude/
+# Local configuration (keep .env.example)
+activate.sh
+claude_desktop_config.json
+
+# Claude Code settings (shared with repo, local settings excluded)
+.claude/settings.local.json
 
 # Logs
 *.log
