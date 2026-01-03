@@ -13,8 +13,8 @@ from datetime import datetime
 import fitz  # PyMuPDF
 from PIL import Image
 
-# 导入参数验证模块
-from pdfkit.mcp.validators import (
+# 导入参数验证模块（从 utils 导入以避免循环导入）
+from ..utils.validators import (
     validate_param,
     ValidationError,
     PARAM_RANGES,
