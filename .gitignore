@@ -71,7 +71,7 @@ batch_output/
 *.md
 !README.md
 docs/
-!.claude/CLAUDE.md
+.claude/
 
 # Local configuration (keep .env.example)
 activate.sh

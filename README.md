@@ -182,10 +182,6 @@ Claude: 我来帮您提取页面... [调用 pdfkit_extract_pages]
 Claude: 我来压缩文件... [调用 pdfkit_compress_pdf]
 ```
 
-### 详细文档
-
-完整的 MCP 工具参考文档请参阅：[MCP 工具参考文档](docs/mcp_tools_reference.md)
-
 ---
 
 ## 许可证
