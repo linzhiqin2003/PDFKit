@@ -86,6 +86,8 @@ class QwenVLOCR:
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
+            timeout=self.timeout,
+            max_retries=self.max_retries,
         )
 
     def ocr_image(
