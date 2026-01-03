@@ -12,6 +12,13 @@ from io import BytesIO
 import fitz  # PyMuPDF
 from PIL import Image
 
+# 导入参数验证模块
+from pdfkit.mcp.validators import (
+    validate_param,
+    ValidationError,
+    PARAM_RANGES,
+)
+
 
 # ==================== 数据模型 ====================
 
@@ -262,7 +269,21 @@ def extract_text(
 
     Returns:
         ExtractTextResult: 提取结果
+
+    Raises:
+        InvalidParameterError: 参数验证失败
+        EncryptedPDFError: PDF 文件已加密
+        PDFExtractError: 提取失败
     """
+    # ========== 参数验证 ==========
+    try:
+        validate_param("output_format", format)
+    except ValidationError as e:
+        raise InvalidParameterError(
+            f"输出格式参数无效: {format}。"
+            f"允许的值: txt, md"
+        )
+
     file_path = Path(file_path)
 
     try:

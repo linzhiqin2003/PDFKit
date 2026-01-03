@@ -11,6 +11,32 @@ from dataclasses import dataclass
 import pikepdf
 
 
+# ==================== 密码验证辅助函数 ====================
+
+def _validate_password(password: str, param_name: str = "password") -> None:
+    """
+    验证密码参数
+
+    Args:
+        password: 密码字符串
+        param_name: 参数名（用于错误消息）
+
+    Raises:
+        PasswordError: 密码无效时
+    """
+    if not password or password.strip() == "":
+        raise PasswordError(
+            f"{param_name} 不能为空。"
+            f"空密码无法提供安全保护。请提供至少 4 个字符的密码。"
+        )
+
+    if len(password) < 4:
+        raise PasswordError(
+            f"{param_name} 长度必须至少为 4 个字符。"
+            f"当前长度: {len(password)}"
+        )
+
+
 # ==================== 数据模型 ====================
 
 @dataclass
@@ -97,11 +123,18 @@ def encrypt_pdf(
     Args:
         file_path: PDF 文件路径
         output_path: 输出文件路径
-        password: 设置密码
+        password: 设置密码（至少 4 个字符）
 
     Returns:
         EncryptResult: 加密结果
+
+    Raises:
+        PasswordError: 密码无效时
+        PDFSecurityError: 加密失败时
     """
+    # ========== 密码验证 ==========
+    _validate_password(password, "password")
+
     file_path = Path(file_path)
     output_path = Path(output_path)
 
@@ -139,11 +172,22 @@ def decrypt_pdf(
     Args:
         file_path: PDF 文件路径
         output_path: 输出文件路径
-        password: PDF 密码
+        password: PDF 密码（必须正确）
 
     Returns:
         DecryptResult: 解密结果
+
+    Raises:
+        PasswordError: 密码为空或错误时
+        PDFSecurityError: 解密失败时
     """
+    # ========== 密码验证 ==========
+    # 注意：解密时允许空密码（有些 PDF 可能没有密码），但需要明确处理
+    # 如果用户明确传入空字符串，给出提示
+    if password == "":
+        # 尝试不使用密码打开
+        pass  # 在下面尝试时处理
+
     file_path = Path(file_path)
     output_path = Path(output_path)
 
@@ -151,8 +195,33 @@ def decrypt_pdf(
         # 检查是否覆盖输入文件
         overwrite_input = (file_path == output_path)
 
+        # 首先检查文件是否加密
+        try:
+            # 尝试不使用密码打开
+            test_pdf = pikepdf.open(file_path, allow_overwriting_input=overwrite_input)
+            is_encrypted = test_pdf.is_encrypted
+            test_pdf.close()
+        except pikepdf.PasswordError:
+            # 需要密码才能打开，说明文件已加密
+            is_encrypted = True
+
+        # 如果文件已加密但未提供密码
+        if is_encrypted and not password:
+            raise PasswordError(
+                "PDF 文件已加密，需要提供正确的密码才能解密。"
+            )
+
         # 使用 pikepdf 打开并解密
-        pdf = pikepdf.open(file_path, password=password, allow_overwriting_input=overwrite_input)
+        # 注意：如果密码错误，pikepdf 会抛出 PasswordError
+        pdf = pikepdf.open(file_path, password=password if password else None, allow_overwriting_input=overwrite_input)
+
+        # 检查解密后的文件是否真的加密了
+        if not pdf.is_encrypted:
+            pdf.close()
+            raise PasswordError(
+                "PDF 文件未加密，无需解密。"
+                "如果这是预期行为，请直接复制文件即可。"
+            )
 
         # 确保输出目录存在
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -167,7 +236,12 @@ def decrypt_pdf(
         )
 
     except pikepdf.PasswordError:
-        raise PasswordError("密码错误")
+        raise PasswordError(
+            "密码错误或 PDF 文件已加密。"
+            "请提供正确的密码。"
+        )
+    except PasswordError:
+        raise
     except Exception as e:
         raise PDFSecurityError(f"解密失败: {e}")
 
@@ -187,7 +261,7 @@ def protect_pdf(
     Args:
         file_path: PDF 文件路径
         output_path: 输出文件路径
-        owner_password: 所有者密码
+        owner_password: 所有者密码（至少 4 个字符）
         user_password: 用户密码（可选）
         no_print: 禁止打印
         no_copy: 禁止复制
@@ -195,7 +269,23 @@ def protect_pdf(
 
     Returns:
         ProtectResult: 设置结果
+
+    Raises:
+        PasswordError: 密码无效时
+        PDFSecurityError: 设置权限失败时
     """
+    # ========== 密码验证 ==========
+    # owner_password 是必需的且不能为空
+    _validate_password(owner_password, "owner_password")
+
+    # user_password 如果提供，也必须验证
+    if user_password and user_password.strip():
+        if len(user_password) < 4:
+            raise PasswordError(
+                f"user_password 长度必须至少为 4 个字符。"
+                f"当前长度: {len(user_password)}"
+            )
+
     file_path = Path(file_path)
     output_path = Path(output_path)
 

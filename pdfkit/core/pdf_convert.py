@@ -13,6 +13,13 @@ from datetime import datetime
 import fitz  # PyMuPDF
 from PIL import Image
 
+# 导入参数验证模块
+from pdfkit.mcp.validators import (
+    validate_param,
+    ValidationError,
+    PARAM_RANGES,
+)
+
 
 # ==================== 数据模型 ====================
 
@@ -177,14 +184,26 @@ def pdf_to_images(
     Args:
         file_path: PDF 文件路径
         output_dir: 输出目录
-        format: 输出格式 (png/jpg/webp)
-        dpi: 输出 DPI
+        format: 输出格式 (png/jpg/jpeg/webp)
+        dpi: 输出 DPI (72-600)
         pages: 页码列表 (0-indexed)，None 表示全部页面
         single: 是否合并为一张图片
 
     Returns:
         ConvertToImagesResult: 转换结果
+
+    Raises:
+        InvalidParameterError: 参数验证失败
+        EncryptedPDFError: PDF 文件已加密
+        PDFConvertError: 转换失败
     """
+    # ========== 参数验证 ==========
+    try:
+        validate_param("format", format)
+        validate_param("dpi", dpi)
+    except ValidationError as e:
+        raise UnsupportedFormatError(str(e))
+
     file_path = Path(file_path)
     output_dir_path = Path(output_dir)
 

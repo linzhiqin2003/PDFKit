@@ -11,6 +11,13 @@ from dataclasses import dataclass
 import fitz  # PyMuPDF
 from PIL import Image
 
+# 导入参数验证模块
+from pdfkit.mcp.validators import (
+    validate_param,
+    ValidationError,
+    PARAM_RANGES,
+)
+
 
 # ==================== 数据模型 ====================
 
@@ -196,24 +203,39 @@ def add_watermark(
         output_path: 输出文件路径
         text: 文字水印内容
         image_path: 图片水印路径
-        angle: 旋转角度 (0/90/180/270)
+        angle: 旋转角度 (0/90/180/270) - PyMuPDF 只支持这些特定角度
         opacity: 透明度 (0-1)
-        font_size: 字体大小
+        font_size: 字体大小 (6-72)
         color: 颜色 (十六进制，如 #FF0000)
         position: 位置 (center/top-left/top-right/bottom-left/bottom-right)
         layer: 图层 (overlay/underlay)
 
     Returns:
         WatermarkResult: 添加结果
+
+    Raises:
+        InvalidParameterError: 参数验证失败
+        EncryptedPDFError: PDF 文件已加密
+        PDFEditError: 处理失败
     """
+    # ========== 参数验证 ==========
+
+    # 基础参数检查
     if text is None and image_path is None:
         raise InvalidParameterError("必须指定 text 或 image_path")
 
     if text and image_path:
         raise InvalidParameterError("text 和 image_path 不能同时使用")
 
-    if not 0 <= opacity <= 1:
-        raise InvalidParameterError(f"opacity 必须在 0-1 之间，当前值: {opacity}")
+    # 使用统一的参数验证
+    try:
+        validate_param("angle", angle)
+        validate_param("opacity", opacity)
+        validate_param("font_size", font_size)
+        validate_param("position", position)
+        validate_param("layer", layer)
+    except ValidationError as e:
+        raise InvalidParameterError(str(e))
 
     file_path = Path(file_path)
     output_path = Path(output_path)
@@ -286,6 +308,31 @@ def crop_pages(
     if margin is None and box is None:
         raise InvalidParameterError("必须指定 margin 或 box")
 
+    # 验证裁剪框参数
+    if box is not None:
+        if len(box) != 4:
+            raise InvalidParameterError(
+                f"裁剪框必须包含 4 个值 [x0, y0, x1, y1]，当前包含 {len(box)} 个值"
+            )
+        # 检查坐标是否有效
+        if box[0] < 0 or box[1] < 0 or box[2] <= box[0] or box[3] <= box[1]:
+            raise InvalidParameterError(
+                f"裁剪框坐标无效: [{box[0]}, {box[1]}, {box[2]}, {box[3]}]。"
+                f"要求: x0 >= 0, y0 >= 0, x1 > x0, y1 > y0"
+            )
+
+    # 验证边距参数
+    if margin is not None:
+        if len(margin) != 4:
+            raise InvalidParameterError(
+                f"边距必须包含 4 个值 [top, right, bottom, left]，当前包含 {len(margin)} 个值"
+            )
+        # 检查边距是否为负数
+        if any(m < 0 for m in margin):
+            raise InvalidParameterError(
+                f"边距不能为负数，当前值: {margin}"
+            )
+
     file_path = Path(file_path)
     output_path = Path(output_path)
 
@@ -310,6 +357,16 @@ def crop_pages(
                     rect.y0 + margin[0],  # top
                     rect.x1 - margin[1],  # right
                     rect.y1 - margin[2]   # bottom
+                )
+
+            # 验证新矩形是否在页面范围内
+            if (new_rect.x0 < rect.x0 or new_rect.y0 < rect.y0 or
+                new_rect.x1 > rect.x1 or new_rect.y1 > rect.y1):
+                raise PDFEditError(
+                    f"裁剪区域超出页面范围 (第 {page_num + 1} 页)。"
+                    f"页面尺寸: {rect.width:.1f} x {rect.height:.1f}，"
+                    f"裁剪区域: ({new_rect.x0:.1f}, {new_rect.y0:.1f}) 到 ({new_rect.x1:.1f}, {new_rect.y1:.1f})。"
+                    f"请使用更小的裁剪区域或更小的边距。"
                 )
 
             page.set_cropbox(new_rect)
@@ -349,11 +406,28 @@ def resize_pages(
         file_path: PDF 文件路径
         output_path: 输出文件路径
         size: 页面大小 (A4/Letter/A3/A5 或 宽x高)
-        scale: 缩放比例
+        scale: 缩放比例 (必须大于 0)
 
     Returns:
         ResizeResult: 调整结果
+
+    Raises:
+        InvalidParameterError: 参数验证失败
+        EncryptedPDFError: PDF 文件已加密
+        PDFEditError: 处理失败
     """
+    # ========== 参数验证 ==========
+    try:
+        validate_param("scale", scale)
+    except ValidationError as e:
+        raise InvalidParameterError(str(e))
+
+    # 额外检查：scale 必须大于 0
+    if scale <= 0:
+        raise InvalidParameterError(
+            f"缩放比例必须大于 0，当前值: {scale}"
+        )
+
     file_path = Path(file_path)
     output_path = Path(output_path)
 

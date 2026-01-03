@@ -8,6 +8,16 @@ from typing import Any, Dict, Optional, TypeVar, Callable
 from functools import wraps
 import asyncio
 
+# 导入错误码系统
+from pdfkit.mcp.errors import (
+    ErrorCode,
+    ErrorDetail,
+    file_not_found,
+    invalid_pdf,
+    encrypted_pdf,
+    get_error_type,
+)
+
 
 # ==================== 自定义异常 ====================
 
@@ -59,48 +69,131 @@ class ProcessingError(MCPError):
 
 # ==================== 错误格式化 ====================
 
-def format_error(error: Exception) -> Dict[str, Any]:
+def format_error(
+    error: Exception,
+    error_code: ErrorCode = None,
+    **context
+) -> Dict[str, Any]:
     """
     格式化错误信息，提供可操作的建议
 
     Args:
         error: 异常对象
+        error_code: 可选的错误码，用于提供更精确的错误分类
+        **context: 额外的上下文信息
 
     Returns:
-        包含错误信息的字典
+        包含错误信息的字典，格式:
+        {
+            "success": False,
+            "error": True,
+            "error_code": "ERR_XXX_XXX",
+            "error_type": "ErrorTypeName",
+            "message": "错误描述",
+            "suggestion": "修复建议",
+            "context": {...}  # 可选
+        }
     """
+    # 如果是自定义 MCP 错误
     if isinstance(error, MCPError):
-        return {
+        result = {
             "success": False,
             "error": True,
             "message": error.message,
-            "suggestion": error.suggestion or "请检查输入参数和文件状态",
             "error_type": error.__class__.__name__,
         }
-    elif isinstance(error, FileNotFoundError):
-        return {
+        if error.suggestion:
+            result["suggestion"] = error.suggestion
+
+        # 如果提供了错误码，添加到响应中
+        if error_code:
+            result["error_code"] = error_code.value
+        else:
+            # 根据错误类型推断错误码
+            error_name = error.__class__.__name__
+            if "FileNotFound" in error_name:
+                result["error_code"] = ErrorCode.FILE_NOT_FOUND.value
+            elif "InvalidPDF" in error_name:
+                result["error_code"] = ErrorCode.FILE_INVALID_PDF.value
+            elif "EncryptedPDF" in error_name:
+                result["error_code"] = ErrorCode.FILE_ENCRYPTED.value
+
+        if context:
+            result["context"] = context
+
+        return result
+
+    # Python 标准异常处理
+    error_type = type(error)
+
+    # 文件相关错误
+    if error_type is FileNotFoundError:
+        result = {
             "success": False,
             "error": True,
-            "message": str(error),
+            "error_code": error_code.value if error_code else ErrorCode.FILE_NOT_FOUND.value,
+            "error_type": "FileNotFoundError",
+            "message": f"文件不存在: {error}",
             "suggestion": "请检查文件路径是否正确",
-            "error_type": "file_not_found",
         }
-    elif isinstance(error, PermissionError):
-        return {
+        if context:
+            result["context"] = context
+        return result
+
+    if error_type is PermissionError:
+        result = {
             "success": False,
             "error": True,
+            "error_code": error_code.value if error_code else ErrorCode.FILE_PERMISSION_DENIED.value,
+            "error_type": "PermissionDeniedError",
             "message": f"权限不足: {error}",
-            "suggestion": "请检查文件权限",
-            "error_type": "permission_denied",
+            "suggestion": "请检查文件权限或目录写入权限",
         }
-    else:
-        return {
+        if context:
+            result["context"] = context
+        return result
+
+    # 值错误 (通常是参数验证失败)
+    if error_type is ValueError:
+        result = {
             "success": False,
             "error": True,
+            "error_code": error_code.value if error_code else ErrorCode.PARAM_INVALID_VALUE.value,
+            "error_type": "ValueError",
             "message": str(error),
-            "suggestion": "请检查输入参数和文件状态",
-            "error_type": "unknown",
+            "suggestion": "请检查参数值是否有效",
         }
+        if context:
+            result["context"] = context
+        return result
+
+    # 类型错误
+    if error_type is TypeError:
+        result = {
+            "success": False,
+            "error": True,
+            "error_code": error_code.value if error_code else ErrorCode.PARAM_INVALID_FORMAT.value,
+            "error_type": "TypeError",
+            "message": str(error),
+            "suggestion": "请检查参数类型是否正确",
+        }
+        if context:
+            result["context"] = context
+        return result
+
+    # 未知错误
+    result = {
+        "success": False,
+        "error": True,
+        "error_code": error_code.value if error_code else "ERR_UNKNOWN",
+        "error_type": error_type.__name__,
+        "message": str(error),
+        "suggestion": "请检查输入参数和文件状态",
+    }
+    if context:
+        result["context"] = context
+
+    return result
 
 
 def format_success(data: Dict[str, Any], message: str = "操作成功") -> Dict[str, Any]:
@@ -331,4 +424,6 @@ __all__ = [
     "log_error",
     # 工具
     "format_size",
+    # 错误码 (重新导出)
+    "ErrorCode",
 ]

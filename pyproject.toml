@@ -10,7 +10,7 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Zhiqin Lin", email = "linzhiqin2003@gmail.com"}
 ]
 keywords = ["pdf", "cli", "pdf-processing", "ocr"]
 classifiers = [

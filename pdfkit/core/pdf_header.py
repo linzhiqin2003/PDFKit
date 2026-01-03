@@ -82,7 +82,7 @@ def add_header(
     Args:
         file_path: PDF 文件路径
         output_path: 输出文件路径
-        text: 页眉文字
+        text: 页眉文字（不能为空）
         font_size: 字体大小
         align: 对齐方式 (left/center/right)
         margin_top: 顶部边距（点）
@@ -90,7 +90,18 @@ def add_header(
 
     Returns:
         HeaderResult: 添加结果
+
+    Raises:
+        InvalidParameterError: 参数无效时
+        EncryptedPDFError: PDF 文件已加密
+        PDFHeaderError: 添加失败时
     """
+    # ========== 参数验证 ==========
+    if not text or text.strip() == "":
+        raise InvalidParameterError(
+            "页眉文字不能为空。请提供有效的文本内容。"
+        )
+
     if align not in ("left", "center", "right"):
         raise InvalidParameterError("对齐方式必须是 left, center 或 right")
 
@@ -204,7 +215,7 @@ def add_footer(
     Args:
         file_path: PDF 文件路径
         output_path: 输出文件路径
-        text: 页脚文字（支持变量）
+        text: 页脚文字（支持变量，不能为空）
         font_size: 字体大小
         align: 对齐方式 (left/center/right)
         margin_bottom: 底部边距（点）
@@ -212,7 +223,18 @@ def add_footer(
 
     Returns:
         FooterResult: 添加结果
+
+    Raises:
+        InvalidParameterError: 参数无效时
+        EncryptedPDFError: PDF 文件已加密
+        PDFHeaderError: 添加失败时
     """
+    # ========== 参数验证 ==========
+    if not text or text.strip() == "":
+        raise InvalidParameterError(
+            "页脚文字不能为空。请提供有效的文本内容。"
+        )
+
     if align not in ("left", "center", "right"):
         raise InvalidParameterError("对齐方式必须是 left, center 或 right")
 
