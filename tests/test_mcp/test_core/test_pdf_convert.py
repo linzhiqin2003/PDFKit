@@ -10,8 +10,8 @@ from pdfkit.core.pdf_convert import (
     PDFConvertError,
     DependencyNotFoundError,
     UnsupportedFormatError,
-    format_size,
 )
+from pdfkit.mcp.utils import format_size
 
 
 class TestFormatSize:

@@ -71,6 +71,7 @@ def format_error(error: Exception) -> Dict[str, Any]:
     """
     if isinstance(error, MCPError):
         return {
+            "success": False,
             "error": True,
             "message": error.message,
             "suggestion": error.suggestion or "请检查输入参数和文件状态",
@@ -78,6 +79,7 @@ def format_error(error: Exception) -> Dict[str, Any]:
         }
     elif isinstance(error, FileNotFoundError):
         return {
+            "success": False,
             "error": True,
             "message": str(error),
             "suggestion": "请检查文件路径是否正确",
@@ -85,6 +87,7 @@ def format_error(error: Exception) -> Dict[str, Any]:
         }
     elif isinstance(error, PermissionError):
         return {
+            "success": False,
             "error": True,
             "message": f"权限不足: {error}",
             "suggestion": "请检查文件权限",
@@ -92,6 +95,7 @@ def format_error(error: Exception) -> Dict[str, Any]:
         }
     else:
         return {
+            "success": False,
             "error": True,
             "message": str(error),
             "suggestion": "请检查输入参数和文件状态",

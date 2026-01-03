@@ -6,6 +6,8 @@ from unittest.mock import Mock, patch
 
 from pdfkit.core.pdf_merge import (
     MergeResult,
+)
+from pdfkit.core.pdf_split import (
     parse_page_range,
     InvalidPageRangeError,
 )

@@ -33,9 +33,9 @@ def test_validate_page_range():
     pages = validate_page_range("1-10", 10)
     assert len(pages) == 10
 
-    # 超出范围应被截断
-    pages = validate_page_range("1-15", 10)
-    assert len(pages) == 10
+    # 超出范围应抛出异常
+    with pytest.raises(ValueError):
+        validate_page_range("1-15", 10)
 
     # 无效页码应抛出异常
     with pytest.raises(ValueError):
