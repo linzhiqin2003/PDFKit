@@ -75,7 +75,7 @@ def pages(
 
         with create_progress() as progress:
             task = progress.add_task(
-                f"{Icons.CROSS} 删除页面中...",
+                f"{Icons.CHECK} 删除页面中...",
                 total=total_pages
             )
 

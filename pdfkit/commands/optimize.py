@@ -230,10 +230,18 @@ def optimize_images(
         optimized_size = output.stat().st_size
         reduction = (1 - optimized_size / original_size) * 100
 
-        print_success(f"优化完成: [path]{output}[/]")
         print_info(f"原始大小: [size]{format_size(original_size)}[/]")
         print_info(f"优化后: [size]{format_size(optimized_size)}[/]")
-        print_info(f"减少: [success]{reduction:.1f}%[/]")
+
+        if reduction > 0:
+            print_success(f"优化完成: [path]{output}[/]")
+            print_info(f"减少: [success]{reduction:.1f}%[/]")
+        else:
+            # 文件变大了，给出警告
+            print_warning(f"优化后文件增大了 {-reduction:.1f}%")
+            print_warning("可能原因: 原始图片已经是最优压缩，或 DPI/质量设置过高")
+            print_info(f"建议: 尝试降低 DPI (当前: {dpi}) 或质量 (当前: {quality})")
+            print_success(f"文件已保存: [path]{output}[/]")
 
     except Exception as e:
         print_error(f"优化失败: {e}")

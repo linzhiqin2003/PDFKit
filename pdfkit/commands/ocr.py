@@ -23,6 +23,48 @@ app = typer.Typer(help="OCR 文字识别 (基于阿里百炼 Qwen3-VL)")
 
 
 # ============================================================================
+# 参数验证辅助函数
+# ============================================================================
+
+def validate_ocr_model(value: str) -> OCRModel:
+    """验证 OCR 模型参数，提供中文错误提示"""
+    try:
+        return OCRModel(value)
+    except ValueError:
+        print_error(f"无效的模型: {value}")
+        print_info("支持的模型:")
+        print_info("  - flash: 快速模式（推荐，速度快）")
+        print_info("  - plus: 高精度模式（精度更高）")
+        print_info("  - ocr: 专用OCR模式（适合结构化文本，如票据、表单）")
+        raise typer.Exit(1)
+
+
+def validate_output_format(value: str) -> OutputFormat:
+    """验证输出格式参数，提供中文错误提示"""
+    try:
+        return OutputFormat(value)
+    except ValueError:
+        print_error(f"无效的输出格式: {value}")
+        print_info("支持的格式:")
+        print_info("  - text: 纯文本格式")
+        print_info("  - md: Markdown 格式")
+        print_info("  - json: JSON 格式")
+        raise typer.Exit(1)
+
+
+def validate_region(value: str) -> Region:
+    """验证地域参数，提供中文错误提示"""
+    try:
+        return Region(value)
+    except ValueError:
+        print_error(f"无效的地域: {value}")
+        print_info("支持的地域:")
+        print_info("  - beijing: 北京（国内推荐）")
+        print_info("  - singapore: 新加坡（海外推荐）")
+        raise typer.Exit(1)
+
+
+# ============================================================================
 # 异步处理辅助函数
 # ============================================================================
 
@@ -151,8 +193,8 @@ def recognize(
         help="PDF 文件路径",
         exists=True,
     ),
-    model: OCRModel = typer.Option(
-        OCRModel.FLASH,
+    model: str = typer.Option(
+        "flash",
         "--model",
         "-m",
         help="模型选择: flash(快速)、plus(精准) 或 ocr(专用OCR，适合结构化文本提取)",
@@ -163,8 +205,8 @@ def recognize(
         "-p",
         help="页面范围 (如: 1-5,8,10-15)",
     ),
-    output_format: OutputFormat = typer.Option(
-        OutputFormat.TEXT,
+    output_format: str = typer.Option(
+        "text",
         "--format",
         "-f",
         help="输出格式: text, md, json",
@@ -191,8 +233,8 @@ def recognize(
         envvar="DASHSCOPE_API_KEY",
         help="API Key",
     ),
-    region: Region = typer.Option(
-        Region.BEIJING,
+    region: str = typer.Option(
+        "beijing",
         "--region",
         help="API 地域",
     ),
@@ -238,6 +280,11 @@ def recognize(
         使用 > 重定向也可保存: pdfkit ocr recognize document.pdf > result.txt
         异步模式 (--async) 会并发处理多个页面，可显著提升处理速度
     """
+    # 验证参数
+    model_enum = validate_ocr_model(model)
+    format_enum = validate_output_format(output_format)
+    region_enum = validate_region(region)
+
     if not validate_pdf_file(file):
         print_error(f"文件不存在或不是有效的 PDF: {file}")
         raise typer.Exit(1)
@@ -247,7 +294,7 @@ def recognize(
 
     try:
         # 初始化 OCR 处理器
-        ocr = QwenVLOCR(api_key=api_key, model=model, region=region)
+        ocr = QwenVLOCR(api_key=api_key, model=model_enum, region=region_enum)
         print_info(f"使用模型: [command]{ocr.model_name}[/]")
 
         # 打开 PDF
@@ -269,7 +316,7 @@ def recognize(
         if async_mode:
             # 异步处理模式
             results = asyncio.run(_process_ocr_async(
-                doc, page_list, ocr, dpi, prompt, output_format
+                doc, page_list, ocr, dpi, prompt, format_enum
             ))
         else:
             # 同步处理模式
@@ -291,7 +338,7 @@ def recognize(
                     text = ocr.ocr_image(
                         img,
                         prompt=prompt,
-                        output_format=output_format,
+                        output_format=format_enum,
                     )
 
                     results.append({
@@ -304,7 +351,7 @@ def recognize(
         doc.close()
 
         # 输出结果
-        _output_results(results, output_format, output)
+        _output_results(results, format_enum, output)
 
         print_success(f"OCR 识别完成！共识别 [number]{len(page_list)}[/] 页")
 
@@ -339,8 +386,8 @@ def extract_table(
         "-o",
         help="输出文件路径",
     ),
-    model: OCRModel = typer.Option(
-        OCRModel.PLUS,
+    model: str = typer.Option(
+        "plus",
         "--model",
         "-m",
         help="模型选择 (表格建议用 plus)",
@@ -368,12 +415,15 @@ def extract_table(
         如果不指定 -o/--output 参数，结果将直接输出到终端
         使用 > 重定向也可保存: pdfkit ocr table document.pdf > tables.md
     """
+    # 验证参数
+    model_enum = validate_ocr_model(model)
+
     if not validate_pdf_file(file):
         print_error(f"文件不存在或不是有效的 PDF: {file}")
         raise typer.Exit(1)
 
     try:
-        ocr = QwenVLOCR(api_key=api_key, model=model)
+        ocr = QwenVLOCR(api_key=api_key, model=model_enum)
 
         doc = fitz.open(file)
         total_pages = doc.page_count

@@ -53,16 +53,41 @@ def run(
         "--continue-on-error/--stop-on-error",
         help="出错时是否继续",
     ),
+    # 水印相关参数
+    watermark_text: Optional[str] = typer.Option(
+        None,
+        "--text",
+        "-t",
+        help="水印文本（用于 watermark 操作）",
+    ),
+    font_size: int = typer.Option(
+        36,
+        "--font-size",
+        help="水印字体大小（用于 watermark 操作）",
+    ),
+    opacity: float = typer.Option(
+        0.3,
+        "--opacity",
+        help="水印透明度 0-1（用于 watermark 操作）",
+    ),
+    angle: int = typer.Option(
+        45,
+        "--angle",
+        help="水印旋转角度（用于 watermark 操作）",
+    ),
 ):
     """
     批量处理 PDF 文件
 
     示例:
         # 批量压缩
-        pdfkit batch run --op compress *.pdf -o ./output
+        pdfkit batch run --op compress *.pdf -d ./output
 
         # 批量水印
-        pdfkit batch run --op watermark *.pdf -o ./output
+        pdfkit batch run --op watermark *.pdf -d ./output --text "机密"
+
+        # 批量水印（自定义样式）
+        pdfkit batch run --op watermark *.pdf -d ./output --text "CONFIDENTIAL" --font-size 48 --opacity 0.5 --angle 30
     """
     valid_files = validate_pdf_files(inputs)
     if not valid_files:
@@ -85,7 +110,11 @@ def run(
     elif operation == "merge":
         _batch_merge(valid_files, output_dir)
     elif operation == "watermark":
-        print_warning("批量水印需要额外参数，请使用配置文件")
+        if not watermark_text:
+            print_error("批量水印需要指定 --text 参数")
+            print_info("示例: pdfkit batch run --op watermark *.pdf -d ./output --text \"机密\"")
+            raise typer.Exit(1)
+        _batch_watermark(valid_files, output_dir, watermark_text, font_size, opacity, angle, continue_on_error)
     elif operation == "ocr":
         _batch_ocr(valid_files, output_dir, continue_on_error)
     else:
@@ -148,6 +177,70 @@ def _batch_merge(files: List[Path], output_dir: Path):
     print_success(f"合并完成: [path]{output}[/]")
     print_info(f"合并文件数: [number]{len(files)}[/]")
 
+
+def _batch_watermark(
+    files: List[Path],
+    output_dir: Path,
+    text: str,
+    font_size: int = 36,
+    opacity: float = 0.3,
+    angle: int = 45,
+    continue_on_error: bool = True
+):
+    """批量添加水印"""
+    success_count = 0
+    failed_count = 0
+
+    with create_progress() as progress:
+        task = progress.add_task(
+            f"{Icons.DROP} 批量添加水印中...",
+            total=len(files)
+        )
+
+        for file in files:
+            try:
+                output = output_dir / f"{file.stem}_watermarked.pdf"
+                doc = fitz.open(file)
+
+                # 为每一页添加水印
+                for page in doc:
+                    rect = page.rect
+                    # 计算水印位置（居中）
+                    center_x = rect.width / 2
+                    center_y = rect.height / 2
+
+                    # 创建水印文本
+                    # 使用透明度和旋转角度
+                    text_color = (0.5, 0.5, 0.5)  # 灰色
+                    alpha = opacity
+
+                    # 插入水印文本
+                    page.insert_text(
+                        (center_x - len(text) * font_size / 4, center_y),
+                        text,
+                        fontsize=font_size,
+                        color=text_color,
+                        rotate=angle,
+                        overlay=True,
+                    )
+
+                doc.save(output)
+                doc.close()
+                success_count += 1
+
+            except Exception as e:
+                failed_count += 1
+                if not continue_on_error:
+                    print_error(f"处理失败: {file.name} - {e}")
+                    raise typer.Exit(1)
+            finally:
+                progress.update(task, advance=1)
+
+    print_success(f"批量水印完成!")
+    print_info(f"水印文本: [text]{text}[/]")
+    print_info(f"成功: [success]{success_count}[/] 个")
+    if failed_count > 0:
+        print_info(f"失败: [error]{failed_count}[/] 个")
 
 def _batch_ocr(files: List[Path], output_dir: Path, continue_on_error: bool):
     """批量 OCR"""

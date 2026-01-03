@@ -70,7 +70,6 @@ batch_output/
 *.txt
 *.md
 !README.md
-docs/
 .claude/
 
 # Local configuration (keep .env.example)

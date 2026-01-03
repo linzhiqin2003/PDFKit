@@ -131,6 +131,10 @@ def decrypt_pdf(
 
     except pikepdf.PasswordError:
         print_error("密码错误")
+        print_info("排查建议:")
+        print_info("  1. 检查大小写是否正确")
+        print_info("  2. 确认是否使用的是打开密码（而非所有者密码）")
+        print_info("  3. 检查是否有特殊字符，如空格或引号")
         raise typer.Exit(1)
     except Exception as e:
         print_error(f"解密失败: {e}")

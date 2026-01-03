@@ -327,15 +327,30 @@ def crop_pages(
 
                 if box:
                     # 使用裁剪框
-                    x0, y0, x1, y1 = map(float, box.split(","))
+                    try:
+                        coords = box.split(",")
+                        if len(coords) != 4:
+                            raise ValueError()
+                        x0, y0, x1, y1 = map(float, coords)
+                    except ValueError:
+                        print_error(f"无效的裁剪框参数: {box}")
+                        print_info("正确格式: x0,y0,x1,y1（单位：点）")
+                        print_info("示例: 100,100,500,700")
+                        raise typer.Exit(1)
                     new_rect = fitz.Rect(x0, y0, x1, y1)
                 else:
                     # 使用边距
-                    margins = list(map(float, margin.split(",")))
-                    if len(margins) == 1:
-                        margins = [margins[0]] * 4
-                    elif len(margins) != 4:
-                        raise ValueError("边距格式错误")
+                    try:
+                        margins = list(map(float, margin.split(",")))
+                        if len(margins) == 1:
+                            margins = [margins[0]] * 4
+                        elif len(margins) != 4:
+                            raise ValueError()
+                    except ValueError:
+                        print_error(f"无效的边距参数: {margin}")
+                        print_info("正确格式: 上,右,下,左（单位：点）")
+                        print_info("示例: 50 或 50,50,50,50")
+                        raise typer.Exit(1)
 
                     new_rect = fitz.Rect(
                         rect.x0 + margins[3],  # left
@@ -428,6 +443,10 @@ def resize_pages(
             size_key = size.upper()
             if size_key not in sizes:
                 print_error(f"不支持的页面大小: {size}")
+                print_info("支持的预设尺寸:")
+                for name, (w, h) in sizes.items():
+                    print_info(f"  - {name}: {w}x{h} 点")
+                print_info("自定义尺寸格式: 宽×高，如 500x700")
                 raise typer.Exit(1)
             width, height = sizes[size_key]
 
