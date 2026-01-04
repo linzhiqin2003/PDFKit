@@ -48,6 +48,13 @@ PATH = "#34D399"            # 文件路径 (绿色)
 NUMBER = "#FBBF24"          # 数字 (黄色)
 SIZE = "#60A5FA"            # 文件大小 (浅蓝)
 
+# 工业风格强调色
+INDUSTRIAL = "#F97316"      # 工业橙 - 主进度条
+STEEL = "#64748B"           # 钢铁灰 - 辅助元素
+COPPER = "#B45309"          # 铜色 - 警告强调
+BRASS = "#CA8A04"           # 黄铜色 - 高级提示
+IRON = "#94A3B8"            # 铁色 - 次要元素
+
 
 # ============================================================================
 # Rich 主题定义
@@ -60,6 +67,8 @@ PDFKIT_THEME = Theme({
     "error": f"bold {ERROR}",
     "success": f"bold {SUCCESS}",
     "text": f"{TEXT}",
+    "black": "black",  # 黑色文本（在浅色终端）
+    "bold_text": "bold black",  # 黑色加粗（在浅色终端显示为黑色）
 
     # 标题和强调
     "title": f"bold {PRIMARY}",
@@ -96,6 +105,14 @@ PDFKIT_THEME = Theme({
     "progress.percentage": f"bold {PRIMARY}",
     "progress.bar.complete": f"{SUCCESS}",
     "progress.bar.incomplete": f"{BORDER}",
+    "progress.bar.industrial": f"{INDUSTRIAL}",
+
+    # 工业风格样式
+    "industrial": f"bold {INDUSTRIAL}",
+    "steel": f"{STEEL}",
+    "copper": f"bold {COPPER}",
+    "brass": f"{BRASS}",
+    "iron": f"{IRON}",
 
     # 表格
     "table.header": f"bold {PRIMARY}",
@@ -187,6 +204,8 @@ def load_theme_from_config(config_colors: Dict[str, str]) -> Theme:
         "error": f"bold {error}",
         "success": f"bold {success}",
         "text": f"{TEXT}",
+        "black": "black",  # 黑色文本（在浅色终端）
+        "bold_text": "bold black",  # 黑色加粗（在浅色终端显示为黑色）
         "title": f"bold {primary}",
         "subtitle": f"{primary}",
         "heading": "bold",
@@ -210,6 +229,12 @@ def load_theme_from_config(config_colors: Dict[str, str]) -> Theme:
         "progress.percentage": f"bold {primary}",
         "progress.bar.complete": f"{success}",
         "progress.bar.incomplete": f"{BORDER}",
+        "progress.bar.industrial": f"{INDUSTRIAL}",
+        "industrial": f"bold {INDUSTRIAL}",
+        "steel": f"{STEEL}",
+        "copper": f"bold {COPPER}",
+        "brass": f"{BRASS}",
+        "iron": f"{IRON}",
         "table.header": f"bold {primary}",
         "table.border": f"{BORDER}",
         "table.row.odd": f"{TEXT}",

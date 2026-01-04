@@ -5,9 +5,11 @@ from typing import Optional
 import typer
 import fitz  # PyMuPDF
 import asyncio
+import sys
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, create_progress, Icons
+    console, print_success, print_error, print_info, create_progress, Icons,
+    print_structured_error, print_security_warning
 )
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.live import Live
@@ -31,11 +33,19 @@ def validate_ocr_model(value: str) -> OCRModel:
     try:
         return OCRModel(value)
     except ValueError:
-        print_error(f"无效的模型: {value}")
-        print_info("支持的模型:")
-        print_info("  - flash: 快速模式（推荐，速度快）")
-        print_info("  - plus: 高精度模式（精度更高）")
-        print_info("  - ocr: 专用OCR模式（适合结构化文本，如票据、表单）")
+        print_structured_error(
+            title=f"无效的模型: {value}",
+            error_message="指定的 OCR 模型不存在",
+            causes=[
+                "模型名称拼写错误",
+                "该模型暂不支持"
+            ],
+            suggestions=[
+                "flash: 快速模式（推荐，速度快）",
+                "plus: 高精度模式（精度更高，约30%提升）",
+                "ocr: 专用OCR模式（适合结构化文本，如票据、表单）"
+            ]
+        )
         raise typer.Exit(1)
 
 
@@ -44,11 +54,19 @@ def validate_output_format(value: str) -> OutputFormat:
     try:
         return OutputFormat(value)
     except ValueError:
-        print_error(f"无效的输出格式: {value}")
-        print_info("支持的格式:")
-        print_info("  - text: 纯文本格式")
-        print_info("  - md: Markdown 格式")
-        print_info("  - json: JSON 格式")
+        print_structured_error(
+            title=f"无效的输出格式: {value}",
+            error_message="指定的输出格式不存在",
+            causes=[
+                "格式名称拼写错误",
+                "该格式暂不支持"
+            ],
+            suggestions=[
+                "text: 纯文本格式（默认）",
+                "md: Markdown 格式（保留结构）",
+                "json: JSON 格式（便于程序处理）"
+            ]
+        )
         raise typer.Exit(1)
 
 
@@ -57,10 +75,18 @@ def validate_region(value: str) -> Region:
     try:
         return Region(value)
     except ValueError:
-        print_error(f"无效的地域: {value}")
-        print_info("支持的地域:")
-        print_info("  - beijing: 北京（国内推荐）")
-        print_info("  - singapore: 新加坡（海外推荐）")
+        print_structured_error(
+            title=f"无效的地域: {value}",
+            error_message="指定的 API 地域不存在",
+            causes=[
+                "地域名称拼写错误",
+                "该地域暂不支持"
+            ],
+            suggestions=[
+                "beijing: 北京（国内推荐，延迟低）",
+                "singapore: 新加坡（海外推荐）"
+            ]
+        )
         raise typer.Exit(1)
 
 
@@ -286,11 +312,37 @@ def recognize(
     region_enum = validate_region(region)
 
     if not validate_pdf_file(file):
-        print_error(f"文件不存在或不是有效的 PDF: {file}")
+        print_structured_error(
+            title="无效的 PDF 文件",
+            error_message=f"文件不存在或不是有效的 PDF: {file}",
+            causes=[
+                "文件路径拼写错误",
+                "文件已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
 
     if not require_unlocked_pdf(file, "OCR 识别"):
         raise typer.Exit(1)
+
+    # API Key 安全警告
+    if api_key and "--api-key" in str(sys.argv):
+        print_security_warning(
+            operation="命令行传递 API Key",
+            risk_level="medium",
+            details="您在命令行中直接传递 API Key，这可能会被 shell 历史记录记录。",
+            risks=[
+                "API Key 可能被保存到 ~/.bash_history 或 ~/.zsh_history",
+                "其他用户可能通过 ps 命令看到您的 API Key",
+                "API Key 可能被日志系统记录"
+            ],
+            confirmation_required=False
+        )
 
     try:
         # 初始化 OCR 处理器

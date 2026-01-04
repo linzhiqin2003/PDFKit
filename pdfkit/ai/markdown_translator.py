@@ -96,7 +96,7 @@ class AIMarkdownTranslator:
             domain: 领域提示（英文描述）
             glossary_path: 术语表CSV文件路径
             preserve_original: 是否在输出中保留原文
-            progress_callback: 进度回调函数，签名为 (current, total, page_num)
+            progress_callback: 进度回调函数，签名为 (current, total, description, advance)
 
         Returns:
             Markdown格式的翻译结果
@@ -122,16 +122,22 @@ class AIMarkdownTranslator:
 
         for idx, page_num in enumerate(pages):
             # 阶段1: VL模型提取原文
+            if progress_callback:
+                progress_callback(idx, total, f"[warning]提取[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页原文[/]", False)
+
             image = pdf_page_to_image(doc[page_num], dpi=self.dpi)
             original_text = self.ocr.ocr_image(image, prompt=OCR_EXTRACT_PROMPT)
 
             if not original_text or not original_text.strip():
                 # 更新进度
                 if progress_callback:
-                    progress_callback(idx + 1, total, page_num + 1)
+                    progress_callback(idx + 1, total, f"[success]完成第 {page_num + 1} 页空白[/]", True)
                 continue
 
             # 阶段2: 专用模型翻译
+            if progress_callback:
+                progress_callback(idx, total, f"[info]翻译[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页[/]", False)
+
             translated_text = self.translator.translate(
                 text=original_text,
                 target_lang=target_lang,
@@ -148,7 +154,7 @@ class AIMarkdownTranslator:
 
             # 更新进度
             if progress_callback:
-                progress_callback(idx + 1, total, page_num + 1)
+                progress_callback(idx + 1, total, f"[success]完成第 {page_num + 1} 页[/]", True)
 
         doc.close()
 

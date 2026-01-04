@@ -7,7 +7,8 @@ import fitz  # PyMuPDF
 import pikepdf
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, Icons
+    console, print_success, print_error, print_info, Icons,
+    print_security_warning, print_structured_error, confirm
 )
 from ..utils.validators import validate_pdf_file
 from ..utils.file_utils import resolve_path
@@ -48,8 +49,33 @@ def encrypt_pdf(
         pdfkit security encrypt document.pdf -p mypassword -o encrypted.pdf
     """
     if not validate_pdf_file(file):
-        print_error(f"文件不存在或不是有效的 PDF: {file}")
+        print_structured_error(
+            title="无效的 PDF 文件",
+            error_message=f"文件不存在或不是有效的 PDF: {file}",
+            causes=[
+                "文件路径拼写错误",
+                "文件已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
+
+    # 显示安全警告
+    print_security_warning(
+        operation="PDF 加密",
+        risk_level="medium",
+        details="您即将对 PDF 文件进行加密。加密后的文件需要密码才能打开。",
+        risks=[
+            "忘记密码将无法打开 PDF",
+            "某些 PDF 查看器可能不支持加密",
+            "密码应妥善保管，避免泄露"
+        ],
+        confirmation_required=False
+    )
 
     try:
         # 确定输出路径
@@ -130,11 +156,22 @@ def decrypt_pdf(
         print_success(f"PDF 已解密: [path]{output}[/]")
 
     except pikepdf.PasswordError:
-        print_error("密码错误")
-        print_info("排查建议:")
-        print_info("  1. 检查大小写是否正确")
-        print_info("  2. 确认是否使用的是打开密码（而非所有者密码）")
-        print_info("  3. 检查是否有特殊字符，如空格或引号")
+        print_structured_error(
+            title="密码错误",
+            error_message="无法使用提供的密码打开 PDF",
+            causes=[
+                "密码大小写不正确",
+                "使用了所有者密码而非用户密码",
+                "密码中包含特殊字符（如空格、引号）",
+                "文件可能已损坏"
+            ],
+            suggestions=[
+                "检查密码大小写是否正确",
+                "确认使用的是打开密码（用户密码）",
+                "尝试复制粘贴密码，避免手动输入错误",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
     except Exception as e:
         print_error(f"解密失败: {e}")
@@ -200,8 +237,43 @@ def protect_pdf(
         pdfkit security protect document.pdf -O ownerpass -U userpass --no-modify
     """
     if not validate_pdf_file(file):
-        print_error(f"文件不存在或不是有效的 PDF: {file}")
+        print_structured_error(
+            title="无效的 PDF 文件",
+            error_message=f"文件不存在或不是有效的 PDF: {file}",
+            causes=[
+                "文件路径拼写错误",
+                "文件已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
+
+    # 显示安全警告
+    restrictions = []
+    if no_print:
+        restrictions.append("禁止打印")
+    if no_copy:
+        restrictions.append("禁止复制")
+    if no_modify:
+        restrictions.append("禁止修改")
+
+    if restrictions:
+        print_security_warning(
+            operation="PDF 权限修改",
+            risk_level="medium",
+            details=f"您正在修改 PDF 的访问权限，将限制: {', '.join(restrictions)}",
+            risks=[
+                "某些 PDF 查看器可能不遵守权限设置",
+                "权限设置可能导致文件在某些设备上无法正常打开",
+                "权限保护并非绝对，专业工具可能绕过限制",
+                "无法撤销权限（除非有原始备份或所有者密码）"
+            ],
+            confirmation_required=False
+        )
 
     try:
         # 确定输出路径

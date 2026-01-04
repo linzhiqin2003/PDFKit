@@ -398,54 +398,63 @@ def translate(
             )
 
         # 执行翻译
-        with create_progress() as progress:
-            if mode == "markdown":
-                task_msg = f"{Icons.MAGIC} AI Markdown 翻译中..."
-                # Markdown 模式显示实际进度
-                task = progress.add_task(task_msg, total=total_pages_to_translate)
+        try:
+            with create_progress() as progress:
+                if mode == "markdown":
+                    task_msg = f"{Icons.MAGIC} AI Markdown 翻译中..."
+                    # Markdown 模式显示实际进度
+                    task = progress.add_task(task_msg, total=total_pages_to_translate)
 
-                # 定义进度回调
-                def progress_callback(current: int, total: int, page_num: int):
-                    progress.update(task, advance=1, description=f"第 {page_num}/{total} 页")
+                    # 定义进度回调（签名：current, total, description, advance）
+                    def progress_callback(current: int, total: int, description: str, advance: bool):
+                        if advance:
+                            progress.update(task, completed=current, description=description)
+                        else:
+                            progress.update(task, description=description)
 
-                # Markdown 模式使用 AIMarkdownTranslator
-                from ..ai.markdown_translator import AIMarkdownTranslator
+                    # Markdown 模式使用 AIMarkdownTranslator
+                    from ..ai.markdown_translator import AIMarkdownTranslator
 
-                md_translator = AIMarkdownTranslator(api_key=api_key)
+                    md_translator = AIMarkdownTranslator(api_key=api_key)
 
-                result = md_translator.translate(
-                    file_path=file,
-                    target_lang=to,
-                    source_lang=from_lang,
-                    pages=page_list,
-                    domain=domain,
-                    glossary_path=glossary,
-                    preserve_original=preserve_original,
-                    progress_callback=progress_callback,
-                )
+                    result = md_translator.translate(
+                        file_path=file,
+                        target_lang=to,
+                        source_lang=from_lang,
+                        pages=page_list,
+                        domain=domain,
+                        glossary_path=glossary,
+                        preserve_original=preserve_original,
+                        progress_callback=progress_callback,
+                    )
 
-                # 保存到文件
-                output.parent.mkdir(parents=True, exist_ok=True)
-                output.write_text(result, encoding="utf-8")
-                result_path = output
-            else:
-                # 图像翻译模式
-                result_path = translator.translate_pdf(
-                    input_path=file,
-                    output_path=output,
-                    target_lang=to,
-                    source_lang=from_lang,
-                    pages=page_list,
-                    domain_hint=domain,
-                    glossary_path=glossary,
-                    skip_main_subject=skip_main_subject,
-                    mode=mode,
-                    preserve_original=preserve_original,
-                )
+                    # 保存到文件
+                    output.parent.mkdir(parents=True, exist_ok=True)
+                    output.write_text(result, encoding="utf-8")
+                    result_path = output
+                else:
+                    # 图像翻译模式
+                    result_path = translator.translate_pdf(
+                        input_path=file,
+                        output_path=output,
+                        target_lang=to,
+                        source_lang=from_lang,
+                        pages=page_list,
+                        domain_hint=domain,
+                        glossary_path=glossary,
+                        skip_main_subject=skip_main_subject,
+                        mode=mode,
+                        preserve_original=preserve_original,
+                    )
 
-            progress.update(task, completed=1, total=1)
+                progress.update(task, completed=1, total=1)
 
-        print_success(f"翻译完成: [path]{result_path}[/]")
+            print_success(f"翻译完成: [path]{result_path}[/]")
+        except KeyboardInterrupt:
+            from ..utils.console import console
+            console.print()
+            print_warning("翻译已取消")
+            raise typer.Exit(130)
 
     except ValueError as e:
         print_error(f"参数错误: {e}")
@@ -560,50 +569,72 @@ def formula(
             raise typer.Exit(1)
 
     try:
-        # 解析页面范围
+        # 解析页面范围并获取实际要处理的页数
         page_list = None
+        total_pages_to_process = 0
         if pages:
             import fitz
             doc = fitz.open(file)
-            total_pages = doc.page_count
+            total_pdf_pages = doc.page_count
             doc.close()
-            page_list = parse_page_range(pages, total_pages)
+            page_list = parse_page_range(pages, total_pdf_pages)
+            total_pages_to_process = len(page_list)
+        else:
+            # 如果没有指定页面，获取总页数
+            import fitz
+            doc = fitz.open(file)
+            total_pages_to_process = doc.page_count
+            doc.close()
 
         # 初始化公式提取器
         print_info(f"使用模型: [command]{model}[/]")
         print_info(f"输出格式: [command]{format}[/]")
+        if pages:
+            print_info(f"页面范围: [info]{pages}[/]")
+        print_info(f"待处理页数: [info]{total_pages_to_process}[/]")
 
         extractor = AIFormulaExtractor(model=model, api_key=api_key)
 
         # 执行提取
-        with create_progress() as progress:
-            task = progress.add_task(
-                f"{Icons.MAGIC} AI 公式识别中...",
-                total=1
-            )
+        try:
+            with create_progress() as progress:
+                task = progress.add_task(
+                    f"{Icons.MAGIC} AI 公式识别中...",
+                    total=total_pages_to_process,
+                )
 
-            result = extractor.extract(
-                file_path=file,
-                pages=page_list,
-                explain=explain,
-                inline=inline,
-                output_format=format,
-            )
+                # 定义进度回调（签名：current, total, description, advance）
+                def progress_callback(current: int, total: int, description: str, advance: bool):
+                    if advance:
+                        progress.update(task, completed=current, description=description)
+                    else:
+                        progress.update(task, description=description)
 
-            progress.update(task, advance=1)
+                result = extractor.extract(
+                    file_path=file,
+                    pages=page_list,
+                    explain=explain,
+                    inline=inline,
+                    output_format=format,
+                    progress_callback=progress_callback,
+                )
 
-        # 保存或显示结果
-        if output:
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(result, encoding="utf-8")
-            print_success(f"公式已保存到: [path]{output}[/]")
-        else:
-            if format == "json":
-                console.print_json(result)
+            # 保存或显示结果
+            if output:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(result, encoding="utf-8")
+                print_success(f"公式已保存到: [path]{output}[/]")
             else:
-                console.print(result)
+                if format == "json":
+                    console.print_json(result)
+                else:
+                    console.print(result)
 
-        print_success("AI 公式识别完成！")
+            print_success("AI 公式识别完成！")
+        except KeyboardInterrupt:
+            console.print()
+            print_warning("公式识别已取消")
+            raise typer.Exit(130)
 
     except FileNotFoundError as e:
         print_error(str(e))
@@ -668,9 +699,9 @@ def extract_images(
         max=100,
     ),
     dpi: int = typer.Option(
-        300,
+        200,
         "--dpi",
-        help="渲染 DPI",
+        help="渲染 DPI (默认200，越低越快但检测精度降低)",
         min=72,
         max=600,
     ),
@@ -755,9 +786,15 @@ def extract_images(
     注意:
         - 使用视觉大模型检测图像，非传统图像提取
         - 可检测页面渲染后的所有视觉内容（包括绘制内容）
-        - 约需 5-10秒/页（取决于模型）
-        - 建议使用 plus 模型以获得更好的检测效果
+        - 约需 5-10秒/页（取决于模型和网络）
         - 会自动生成 metadata.json 元数据文件
+
+    性能优化建议:
+        - 使用 flash 模型更快（但精度略低）
+        - 降低 DPI 可加快速度（默认200，最低72）
+        - 限制页面范围（--pages）可减少处理时间
+        - 需要快速提取？使用传统命令（无法检测绘制内容）：
+          pdfkit extract images input.pdf -o output/  # 秒级完成
     """
     # 验证格式
     valid_formats = ["png", "jpg", "jpeg", "webp"]
@@ -814,64 +851,86 @@ def extract_images(
         else:
             output = Path(output)
 
-        # 解析页面范围
+        # 解析页面范围并获取实际要处理的页数
         page_list = None
+        total_pages_to_process = 0
         if pages:
             import fitz
             doc = fitz.open(file)
-            total_pages = doc.page_count
+            total_pdf_pages = doc.page_count
             doc.close()
-            page_list = parse_page_range(pages, total_pages)
+            page_list = parse_page_range(pages, total_pdf_pages)
+            total_pages_to_process = len(page_list)
+        else:
+            # 如果没有指定页面，获取总页数
+            import fitz
+            doc = fitz.open(file)
+            total_pages_to_process = doc.page_count
+            doc.close()
 
         # 初始化图像提取器
         print_info(f"使用模型: [command]{model}[/]")
         print_info(f"输出格式: [command]{output_format}[/]")
         print_info(f"输出目录: [path]{output}[/]")
+        if pages:
+            print_info(f"页面范围: [info]{pages}[/]")
+        print_info(f"待处理页数: [info]{total_pages_to_process}[/]")
 
         extractor = AIImageExtractor(model=model, api_key=api_key)
 
         # 执行提取
-        with create_progress() as progress:
-            task = progress.add_task(
-                f"{Icons.MAGIC} AI 图像检测与提取中...",
-                total=None  # 不确定进度
-            )
+        try:
+            with create_progress() as progress:
+                task = progress.add_task(
+                    f"{Icons.MAGIC} AI 图像检测与提取中...",
+                    total=total_pages_to_process,
+                )
 
-            extracted = extractor.extract_images(
-                pdf_path=file,
-                output_dir=output,
-                pages=page_list,
-                types=types_list,
-                exclude_types=exclude_list,
-                min_size=min_size,
-                dpi=dpi,
-                padding=padding,
-                output_format=output_format,
-                quality=quality,
-            )
+                # 定义进度回调（签名：current, total, description, advance）
+                def progress_callback(current: int, total: int, description: str, advance: bool):
+                    if advance:
+                        progress.update(task, completed=current, description=description)
+                    else:
+                        progress.update(task, description=description)
 
-            progress.update(task, completed=1, total=1)
+                extracted = extractor.extract_images(
+                    pdf_path=file,
+                    output_dir=output,
+                    pages=page_list,
+                    types=types_list,
+                    exclude_types=exclude_list,
+                    min_size=min_size,
+                    dpi=dpi,
+                    padding=padding,
+                    output_format=output_format,
+                    quality=quality,
+                    progress_callback=progress_callback,
+                )
 
-        # 显示结果
-        if not extracted:
-            print_info("未检测到任何图像")
-            raise typer.Exit(0)
+            # 显示结果
+            if not extracted:
+                print_info("未检测到任何图像")
+                raise typer.Exit(0)
 
-        print_success(f"成功提取 [success]{len(extracted)}[/] 个图像")
+            print_success(f"成功提取 [success]{len(extracted)}[/] 个图像")
 
-        # 按类型统计
-        type_counts = {}
-        for img in extracted:
-            img_type = img.get("type", "unknown")
-            type_counts[img_type] = type_counts.get(img_type, 0) + 1
+            # 按类型统计
+            type_counts = {}
+            for img in extracted:
+                img_type = img.get("type", "unknown")
+                type_counts[img_type] = type_counts.get(img_type, 0) + 1
 
-        print_info("图像类型统计:")
-        for img_type, count in sorted(type_counts.items()):
-            type_name = IMAGE_TYPES.get(img_type, img_type)
-            print_info(f"  - {type_name}: {count}")
+            print_info("图像类型统计:")
+            for img_type, count in sorted(type_counts.items()):
+                type_name = IMAGE_TYPES.get(img_type, img_type)
+                print_info(f"  - {type_name}: {count}")
 
-        print_success(f"图像已保存到: [path]{output}[/]")
-        print_info(f"元数据已保存到: [path]{output / 'metadata.json'}[/]")
+            print_success(f"图像已保存到: [path]{output}[/]")
+            print_info(f"元数据已保存到: [path]{output / 'metadata.json'}[/]")
+        except KeyboardInterrupt:
+            console.print()
+            print_warning("图像提取已取消")
+            raise typer.Exit(130)
 
     except ValueError as e:
         print_error(f"参数错误: {e}")

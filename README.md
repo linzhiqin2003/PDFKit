@@ -14,19 +14,60 @@ PDFKit 是一个功能全面、使用简单、界面美观的 PDF 命令行处�
 
 ## 安装
 
+### 🚀 macOS 一键安装 (推荐)
+
+在终端中运行以下命令，自动完成所有安装步骤：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/linzhiqin2003/pdfkit/main/scripts/install.sh | bash
+```
+
+该脚本会自动：
+- 安装 Homebrew (如未安装)
+- 安装 Git 和 Python 3.12+
+- 克隆代码到 `~/.pdfkit-cli`
+- 创建虚拟环境并安装依赖
+- 配置 `pdfkit` 系统命令
+
+### 基础安装 (pip)
+
 ```bash
 pip install pdfkit-cli
+```
+
+### 完整安装 (包含所有可选功能)
+
+```bash
+pip install 'pdfkit-cli[full]'
 ```
 
 ### 可选依赖
 
 某些功能需要额外的依赖包：
 
-| 功能 | 依赖 | 安装命令 |
-|------|------|---------|
-| AI 翻译 | `requests` | `pip install requests` |
+| 功能 | 依赖 | 安装命令 | 说明 |
+|------|------|---------|------|
+| PDF 转图片 | `pdf2image` + Poppler | `pip install 'pdfkit-cli[pdf2image]'` | 需额外安装 Poppler |
+| HTML 转 PDF | `weasyprint` + GTK | `pip install 'pdfkit-cli[weasyprint]'` | Windows 需 MSYS2 |
+| 网页截图 | `playwright` | `pip install 'pdfkit-cli[playwright]'` | 需 `playwright install` |
+| 全部功能 | 以上所有 | `pip install 'pdfkit-cli[full]'` | - |
 
-**注意**: AI 翻译功能（`ai translate` 命令）依赖 `requests` 库进行图像上传和下载。如果未安装，运行时会显示友好的安装提示。
+### Windows 安装
+
+Windows 64-bit 用户请参阅详细安装指南：[📖 Windows 安装指南](docs/windows-installation.md)
+
+主要注意事项：
+- 配置目录: `%APPDATA%\pdfkit\`
+- Poppler: 需手动下载安装
+- WeasyPrint: 需安装 MSYS2 + GTK
+
+### 系统诊断
+
+检查安装状态和系统信息：
+
+```bash
+pdfkit info system
+```
 
 ## 快速开始
 
@@ -105,7 +146,9 @@ pdfkit ocr scan.pdf
 
 ## 配置
 
-配置文件位于 `~/.pdfkit/config.yaml`：
+配置文件位置：
+- **macOS/Linux**: `~/.pdfkit/config.yaml`
+- **Windows**: `%APPDATA%\pdfkit\config.yaml`
 
 ```yaml
 ocr:

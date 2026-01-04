@@ -7,10 +7,12 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 import fitz  # PyMuPDF
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, create_progress, Icons
+    console, print_success, print_error, print_info, create_progress, Icons,
+    LiveProgress, print_operation_summary_panel, print_structured_error
 )
 from ..utils.validators import validate_pdf_file, validate_page_range, require_unlocked_pdf
 from ..utils.file_utils import generate_output_path, resolve_path
+import time
 
 
 def split(
@@ -68,11 +70,25 @@ def split(
     """
     # 验证文件
     if not validate_pdf_file(file):
-        print_error(f"文件不存在或不是有效的 PDF: {file}")
+        print_structured_error(
+            title="无效的 PDF 文件",
+            error_message=f"文件不存在或不是有效的 PDF: {file}",
+            causes=[
+                "文件路径拼写错误",
+                "文件已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
 
     if not require_unlocked_pdf(file, "拆分"):
         raise typer.Exit(1)
+
+    start_time = time.time()
 
     try:
         # 打开 PDF
@@ -90,22 +106,49 @@ def split(
 
         if single:
             # 拆分为单页文件
-            _split_single_pages(doc, file, output_dir, prefix)
+            file_count = _split_single_pages(doc, file, output_dir, prefix)
         elif chunks:
             # 按多个范围拆分（每个范围独立文件）
-            _split_by_chunks(doc, file, output_dir, chunks, prefix)
+            file_count = _split_by_chunks(doc, file, output_dir, chunks, prefix)
         elif range_str:
             # 按范围拆分（连续范围合并）
             page_list = validate_page_range(range_str, total_pages)
-            _split_by_range(doc, file, output_dir, page_list, prefix)
+            file_count = _split_by_range(doc, file, output_dir, page_list, prefix)
         else:
             # 默认拆分为单页
-            _split_single_pages(doc, file, output_dir, prefix)
+            file_count = _split_single_pages(doc, file, output_dir, prefix)
 
         doc.close()
 
+        # 打印操作摘要
+        console.print()
+        duration = time.time() - start_time
+        print_operation_summary_panel(
+            total=total_pages,
+            success=file_count,
+            failed=0,
+            skipped=0,
+            duration=duration,
+            output_path=str(output_dir)
+        )
+
     except Exception as e:
-        print_error(f"拆分失败: {e}")
+        print_structured_error(
+            title="拆分失败",
+            error_message=str(e),
+            causes=[
+                "PDF 文件可能已损坏",
+                "磁盘空间不足",
+                "输出目录无写入权限",
+                "文件加密导致无法读取"
+            ],
+            suggestions=[
+                "使用 pdfkit info 检查文件状态",
+                "检查磁盘空间: df -h",
+                "确认输出目录有写入权限",
+                "如果文件加密，先使用 pdfkit decrypt 解密"
+            ]
+        )
         raise typer.Exit(1)
 
 
@@ -114,17 +157,12 @@ def _split_single_pages(
     input_file: Path,
     output_dir: Path,
     prefix: str
-):
-    """拆分为单页文件"""
+) -> int:
+    """拆分为单页文件，返回生成的文件数"""
     total_pages = doc.page_count
     stem = input_file.stem
 
-    with create_progress() as progress:
-        task = progress.add_task(
-            f"{Icons.SPLIT} 拆分中...",
-            total=total_pages
-        )
-
+    with LiveProgress("拆分中", total=total_pages) as progress:
         for page_num in range(total_pages):
             # 创建新文档
             new_doc = fitz.open()
@@ -140,10 +178,10 @@ def _split_single_pages(
             new_doc.save(output_path)
             new_doc.close()
 
-            progress.update(task, advance=1)
+            # 更新进度，显示当前处理的文件
+            progress.update(advance=1, detail=f"保存 {output_name}")
 
-    print_success(f"拆分完成！共生成 [number]{total_pages}[/] 个文件")
-    print_info(f"输出目录: [path]{output_dir}[/]")
+    return total_pages
 
 
 def _split_by_chunks(
@@ -152,8 +190,8 @@ def _split_by_chunks(
     output_dir: Path,
     chunks_str: str,
     prefix: str
-):
-    """按多个范围拆分，每个范围生成一个独立文件"""
+) -> int:
+    """按多个范围拆分，每个范围生成一个独立文件，返回生成的文件数"""
     stem = input_file.stem
     total_pages = doc.page_count
 
@@ -181,16 +219,23 @@ def _split_by_chunks(
                 continue
 
     if not chunk_ranges:
-        print_error("没有有效的页面范围")
+        print_structured_error(
+            title="没有有效的页面范围",
+            error_message=f"无法解析范围: {chunks_str}",
+            causes=[
+                "范围格式不正确",
+                "页码超出文档范围"
+            ],
+            suggestions=[
+                "正确格式: 1-5,8,10-15",
+                "页码从 1 开始",
+                "使用 pdfkit info 查看文档总页数"
+            ]
+        )
         raise typer.Exit(1)
 
     # 为每个chunk生成一个文件
-    with create_progress() as progress:
-        task = progress.add_task(
-            f"{Icons.SPLIT} 拆分中...",
-            total=len(chunk_ranges)
-        )
-
+    with LiveProgress("拆分中", total=len(chunk_ranges)) as progress:
         for i, (start_page, end_page) in enumerate(chunk_ranges, 1):
             new_doc = fitz.open()
 
@@ -208,10 +253,9 @@ def _split_by_chunks(
             new_doc.save(output_path)
             new_doc.close()
 
-            progress.update(task, advance=1)
+            progress.update(advance=1, detail=f"保存 {output_name}")
 
-    print_success(f"拆分完成！共生成 [number]{len(chunk_ranges)}[/] 个文件")
-    print_info(f"输出目录: [path]{output_dir}[/]")
+    return len(chunk_ranges)
 
 
 def _split_by_range(
@@ -220,10 +264,21 @@ def _split_by_range(
     output_dir: Path,
     page_list: List[int],
     prefix: str
-):
-    """按页面范围拆分"""
+) -> int:
+    """按页面范围拆分，返回生成的文件数"""
     if not page_list:
-        print_error("没有有效的页面范围")
+        print_structured_error(
+            title="没有有效的页面范围",
+            error_message="页面范围为空",
+            causes=[
+                "指定的页面范围不包含任何页",
+                "页面范围格式可能不正确"
+            ],
+            suggestions=[
+                "检查页面范围格式",
+                "使用 pdfkit info 查看文档总页数"
+            ]
+        )
         raise typer.Exit(1)
 
     stem = input_file.stem
@@ -240,19 +295,12 @@ def _split_by_range(
         new_doc.save(output_path)
         new_doc.close()
 
-        print_success(f"拆分完成！")
-        print_info(f"输出文件: [path]{output_path}[/]")
-        print_info(f"包含页数: [number]{len(page_list)}[/] 页 (第 {page_list[0] + 1}-{page_list[-1] + 1} 页)")
+        return 1
     else:
         # 非连续范围，每个范围生成一个文件
         ranges = _group_consecutive(page_list)
 
-        with create_progress() as progress:
-            task = progress.add_task(
-                f"{Icons.SPLIT} 拆分中...",
-                total=len(ranges)
-            )
-
+        with LiveProgress("拆分中", total=len(ranges)) as progress:
             for r in ranges:
                 new_doc = fitz.open()
 
@@ -264,10 +312,9 @@ def _split_by_range(
                 new_doc.save(output_path)
                 new_doc.close()
 
-                progress.update(task, advance=1)
+                progress.update(advance=1, detail=f"保存 {output_name}")
 
-        print_success(f"拆分完成！共生成 [number]{len(ranges)}[/] 个文件")
-        print_info(f"输出目录: [path]{output_dir}[/]")
+        return len(ranges)
 
 
 def _is_consecutive(pages: List[int]) -> bool:

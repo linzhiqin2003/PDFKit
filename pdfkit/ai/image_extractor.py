@@ -86,6 +86,7 @@ bbox 坐标格式：[左上角x, 左上角y, 右下角x, 右下角y]
         padding: int = 0,
         output_format: str = "png",
         quality: int = 95,
+        progress_callback: Optional[callable] = None,
     ) -> List[dict]:
         """
         从 PDF 中智能提取图像
@@ -101,6 +102,7 @@ bbox 坐标格式：[左上角x, 左上角y, 右下角x, 右下角y]
             padding: 边界框扩展像素
             output_format: 输出格式 (png/jpg/webp)
             quality: JPG/WebP 质量
+            progress_callback: 进度回调函数，签名为 (current, total, description, advance)
 
         Returns:
             提取的图像信息列表
@@ -112,24 +114,39 @@ bbox 坐标格式：[左上角x, 左上角y, 右下角x, 右下角y]
         if pages is None:
             pages = list(range(doc.page_count))
 
+        total = len(pages)
         all_extracted = []
         image_counter = 0
 
-        for page_num in pages:
+        for idx, page_num in enumerate(pages):
             page = doc[page_num]
 
-            # 1. 渲染页面为图像
+            # 开始处理该页
+            if progress_callback:
+                progress_callback(idx, total, f"[black]处理[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页[/]", False)
+
+            # 1. 渲染页面为图像（很快，不需要单独显示状态）
             mat = fitz.Matrix(dpi / 72, dpi / 72)
             pix = page.get_pixmap(matrix=mat)
             page_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-            # 2. 调用 VL 模型检测图像
+            # 2. 调用 VL 模型检测图像（耗时操作）
+            if progress_callback:
+                progress_callback(idx, total, f"[info]检测[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页图像[/]", False)
+
             detected = self._detect_images(page_image, types, exclude_types)
 
             if not detected:
+                # 没有检测到图像
+                if progress_callback:
+                    progress_callback(idx + 1, total, f"[success]完成第 {page_num + 1} 页无图像[/]", True)
                 continue
 
             # 3. 裁切并保存图像
+            if progress_callback:
+                progress_callback(idx, total, f"[warning]提取[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页图像[/]", False)
+
+            page_extracted = 0
             for img_info in detected:
                 bbox = img_info["bbox"]
 
@@ -149,6 +166,7 @@ bbox 坐标格式：[左上角x, 左上角y, 右下角x, 右下角y]
 
                 # 保存图像
                 image_counter += 1
+                page_extracted += 1
                 filename = f"page{page_num + 1:03d}_img{image_counter:03d}.{output_format}"
                 output_path = output_dir / filename
 
@@ -168,6 +186,10 @@ bbox 坐标格式：[左上角x, 左上角y, 右下角x, 右下角y]
                     "size": [width, height],
                     "bbox": pixel_bbox,
                 })
+
+            # 页面完成，advance 进度
+            if progress_callback:
+                progress_callback(idx + 1, total, f"[success]完成第 {page_num + 1} 页({page_extracted}个图像)[/]", True)
 
         doc.close()
 

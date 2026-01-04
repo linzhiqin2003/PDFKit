@@ -26,11 +26,10 @@ classifiers = [
 ]
 
 dependencies = [
-    # PDF 处理核心
+    # PDF 处理核心 (跨平台兼容)
     "PyMuPDF>=1.23.0",
     "pypdf>=3.0.0",
     "pdfplumber>=0.10.0",
-    "pdf2image>=1.16.0",
     "img2pdf>=0.5.0",
     "pikepdf>=8.0.0",
 
@@ -38,10 +37,8 @@ dependencies = [
     "openai>=1.0.0",
     "Pillow>=10.0.0",
 
-    # 转换
+    # 转换 (基础)
     "python-docx>=1.0.0",
-    "weasyprint>=60.0",  # HTML 转 PDF（替代 pdfkit 避免命名冲突）
-    "playwright>=1.40.0",
 
     # CLI 框架
     "typer>=0.9.0",
@@ -59,6 +56,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# PDF 转图片 (需要 Poppler, Windows 需手动安装)
+pdf2image = [
+    "pdf2image>=1.16.0",
+]
+
+# HTML 转 PDF (需要 GTK, Windows 需 MSYS2)
+weasyprint = [
+    "weasyprint>=60.0",
+]
+
+# 网页截图/PDF (需要安装浏览器: playwright install)
+playwright = [
+    "playwright>=1.40.0",
+]
+
+# 完整功能 (包含所有可选依赖)
+full = [
+    "pdf2image>=1.16.0",
+    "weasyprint>=60.0",
+    "playwright>=1.40.0",
+]
+
+# 开发依赖
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",

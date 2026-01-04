@@ -7,10 +7,12 @@ import fitz  # PyMuPDF
 
 from ..core.pdf_merge import merge_files, MergeResult, interleave_files
 from ..utils.console import (
-    console, print_success, print_error, print_info, create_progress, Icons, print_warning
+    console, print_success, print_error, print_info, create_progress, Icons, print_warning,
+    StageProgress, print_operation_summary_panel, print_structured_error
 )
 from ..utils.validators import validate_pdf_files
 from ..utils.file_utils import resolve_path
+import time
 
 # 创建 merge 子应用
 app = typer.Typer(help="合并 PDF")
@@ -70,14 +72,25 @@ def files(
     # 验证文件
     valid_files = validate_pdf_files(inputs)
     if not valid_files:
-        print_error("没有找到有效的 PDF 文件")
+        print_structured_error(
+            title="没有找到有效的 PDF 文件",
+            error_message="提供的输入中没有有效的 PDF 文件",
+            causes=[
+                "文件路径拼写错误",
+                "文件可能已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态",
+                "确认文件扩展名是 .pdf"
+            ]
+        )
         raise typer.Exit(1)
 
     # 排序
     if sort:
         valid_files.sort(key=lambda x: x.name)
-
-    print_info(f"准备合并 [number]{len(valid_files)}[/] 个 PDF 文件")
 
     # 生成输出路径
     if output is None:
@@ -89,6 +102,17 @@ def files(
     output.parent.mkdir(parents=True, exist_ok=True)
 
     # 使用核心模块的三层容错策略
+    start_time = time.time()
+
+    # 初始化多阶段进度（完成后统一显示）
+    stages = [
+        {"name": "验证文件", "status": "done", "detail": f"{len(valid_files)} 个文件"},
+        {"name": "合并文件", "status": "running", "detail": f"{len(valid_files)} 个文件 → {output.name}"},
+        {"name": "生成输出", "status": "pending", "detail": "等待中"},
+    ]
+
+    print_info(f"正在合并 [number]{len(valid_files)}[/] 个 PDF 文件...")
+
     try:
         result: MergeResult = merge_files(
             valid_files,
@@ -98,20 +122,44 @@ def files(
             skip_errors=skip_errors,
         )
 
-        # 显示结果
-        print_success(f"合并完成: [path]{output}[/]")
-        print_info(f"成功合并: [success]{result.merged_files}[/] / {result.total_files} 个文件")
-        print_info(f"总页数: [pdf.pages]{result.total_pages}[/] 页")
+        # 更新所有阶段为完成状态
+        stages[1]["status"] = "done"
+        stages[2]["status"] = "done"
+        stages[2]["detail"] = f"{result.total_pages} 页"
 
-        if result.failed_files:
-            print_warning(f"跳过了 {len(result.failed_files)} 个无法处理的文件:")
-            for pdf_file, error in result.failed_files[:3]:
-                console.print(f"  [path]{Path(pdf_file).name}[/]: {error[:50]}...", style="dim")
-            if len(result.failed_files) > 3:
-                console.print(f"  ... 及其他 {len(result.failed_files) - 3} 个文件", style="dim")
+        # 打印最终阶段进度（只打印一次）
+        console.print()
+        StageProgress(stages).print()
+
+        # 打印操作摘要面板
+        console.print()
+        duration = time.time() - start_time
+        print_operation_summary_panel(
+            total=result.total_files,
+            success=result.merged_files,
+            failed=len(result.failed_files),
+            skipped=0,
+            duration=duration,
+            output_path=str(output)
+        )
 
     except Exception as e:
-        print_error(f"合并失败: {e}")
+        print_structured_error(
+            title="合并失败",
+            error_message=str(e),
+            causes=[
+                "某些 PDF 文件可能已损坏",
+                "文件加密导致无法读取",
+                "磁盘空间不足",
+                "输出路径无写入权限"
+            ],
+            suggestions=[
+                "使用 --skip-errors 跳过损坏文件",
+                "检查磁盘空间: df -h",
+                "确认输出目录有写入权限",
+                "尝试单独处理有问题的文件"
+            ]
+        )
         raise typer.Exit(1)
 
 

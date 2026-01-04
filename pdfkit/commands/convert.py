@@ -8,11 +8,13 @@ import fitz  # PyMuPDF
 from PIL import Image
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, print_warning, create_progress, Icons
+    console, print_success, print_error, print_info, print_warning, create_progress, Icons,
+    print_operation_summary_panel, print_structured_error
 )
 from ..utils.validators import validate_pdf_file, validate_image_format, validate_page_range
 from ..utils.file_utils import resolve_path, ensure_dir, format_size
 from ..utils.config import load_config
+import time
 
 # 创建 convert 子应用
 app = typer.Typer(help="格式转换")
@@ -77,12 +79,37 @@ def pdf_to_image(
         pdfkit convert to-image document.pdf --single
     """
     if not validate_pdf_file(file):
-        print_error(f"文件不存在或不是有效的 PDF: {file}")
+        print_structured_error(
+            title="无效的 PDF 文件",
+            error_message=f"文件不存在或不是有效的 PDF: {file}",
+            causes=[
+                "文件路径拼写错误",
+                "文件已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
 
     if not validate_image_format(format):
-        print_error(f"不支持的图片格式: {format}")
+        print_structured_error(
+            title="不支持的图片格式",
+            error_message=f"格式 '{format}' 不支持",
+            causes=[
+                "格式拼写错误",
+                "该格式暂不支持"
+            ],
+            suggestions=[
+                "支持的格式: png, jpg, webp",
+                "使用 --format 指定正确的格式"
+            ]
+        )
         raise typer.Exit(1)
+
+    start_time = time.time()
 
     try:
         doc = fitz.open(file)
@@ -101,22 +128,54 @@ def pdf_to_image(
             output_dir = resolve_path(output_dir)
         ensure_dir(output_dir)
 
+        page_count = len(page_list)
+
         if single:
             # 合并为一张图片
             _convert_to_single_image(doc, page_list, output_dir, file.stem, format, dpi)
+            success_count = 1
         else:
             # 每页单独保存
-            _convert_to_images(doc, page_list, output_dir, file.stem, format, dpi)
+            success_count = _convert_to_images(doc, page_list, output_dir, file.stem, format, dpi)
 
         doc.close()
 
+        # 打印操作摘要
+        duration = time.time() - start_time
+        print_operation_summary_panel(
+            total=page_count,
+            success=success_count,
+            failed=0,
+            skipped=0,
+            duration=duration,
+            output_path=str(output_dir)
+        )
+
     except Exception as e:
-        print_error(f"转换失败: {e}")
+        print_structured_error(
+            title="转换失败",
+            error_message=str(e),
+            causes=[
+                "PDF 文件可能已加密",
+                "内存不足",
+                "磁盘空间不足",
+                "DPI 设置过高导致内存溢出"
+            ],
+            suggestions=[
+                "尝试降低 DPI: --dpi 100",
+                "检查磁盘空间: df -h",
+                "如果文件加密，先使用 pdfkit decrypt 解密"
+            ]
+        )
         raise typer.Exit(1)
 
 
-def _convert_to_images(doc: fitz.Document, page_list: List[int], output_dir: Path, stem: str, format: str, dpi: int):
-    """每页转换为单独图片"""
+def _convert_to_images(doc: fitz.Document, page_list: List[int], output_dir: Path, stem: str, format: str, dpi: int) -> int:
+    """每页转换为单独图片
+
+    Returns:
+        成功转换的页面数
+    """
     zoom = dpi / 72  # PyMuPDF 使用 72 作为基准 DPI
 
     with create_progress() as progress:
@@ -139,9 +198,7 @@ def _convert_to_images(doc: fitz.Document, page_list: List[int], output_dir: Pat
 
             progress.update(task, advance=1)
 
-    print_success(f"转换完成!")
-    print_info(f"输出数量: [number]{len(page_list)}[/] 张")
-    print_info(f"输出目录: [path]{output_dir}[/]")
+    return len(page_list)
 
 
 def _convert_to_single_image(doc: fitz.Document, page_list: List[int], output_dir: Path, stem: str, format: str, dpi: int):
@@ -171,10 +228,6 @@ def _convert_to_single_image(doc: fitz.Document, page_list: List[int], output_di
     # 保存
     output_path = output_dir / f"{stem}_combined.{format}"
     combined.save(output_path, format.upper() if format != "jpg" else "JPEG")
-
-    print_success(f"转换完成!")
-    print_info(f"输出文件: [path]{output_path}[/]")
-    print_info(f"图片尺寸: [number]{max_width}[/] x [number]{total_height}[/] 像素")
 
 
 # ============================================================================

@@ -4,13 +4,19 @@ from pathlib import Path
 from typing import Optional
 import typer
 from rich.table import Table
+from rich import box
 import fitz  # PyMuPDF
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, Icons
+    console, print_success, print_error, print_info, print_warning, Icons,
+    print_table_with_style, print_structured_error
 )
 from ..utils.validators import validate_pdf_file
 from ..utils.file_utils import format_size, format_date
+from ..utils.platform import (
+    get_system_info, check_dependencies, get_app_config_dir,
+    get_documents_dir, get_cache_dir, find_poppler_path
+)
 
 # 创建 info 子应用
 app = typer.Typer(help="查看 PDF 信息")
@@ -168,22 +174,16 @@ def metadata(
             import json
             console.print_json(json.dumps(meta, ensure_ascii=False, indent=2))
         else:
-            table = Table(
+            # 使用工业风格表格
+            columns = ["属性", "值"]
+            rows = [[key, str(value)] for key, value in meta.items() if value]
+
+            print_table_with_style(
                 title=f"{Icons.PDF} PDF 元数据",
-                title_style="bold magenta",
-                border_style="dim",
-                show_header=True,
-                header_style="bold cyan",
+                columns=columns,
+                rows=rows,
+                style="industrial"
             )
-
-            table.add_column("属性", style="bold cyan", width=15)
-            table.add_column("值", style="white")
-
-            for key, value in meta.items():
-                if value:
-                    table.add_row(key, str(value))
-
-            console.print(table)
 
         doc.close()
 
@@ -195,45 +195,175 @@ def metadata(
 
 
 def _print_info_table(info: dict, detailed: bool):
-    """打印信息表格"""
+    """打印信息表格 - 使用工业风格"""
 
-    # 创建表格
-    table = Table(
-        title=f"{Icons.PDF} PDF 文件信息",
-        title_style="bold magenta",
-        border_style="dim",
-        show_header=True,
-        header_style="bold cyan",
-        padding=(0, 1),
-    )
-
-    table.add_column("属性", style="bold cyan", width=15)
-    table.add_column("值", style="white")
-
-    # 基础信息
-    table.add_row("文件名", f"[cyan]{info['filename']}[/]")
-    table.add_row("路径", f"[dim]{info['path']}[/]")
-    table.add_row("文件大小", f"[green]{info['size']}[/]")
-    table.add_row("页数", f"[yellow]{info['pages']}[/] 页")
-    table.add_row("PDF 版本", info['version'])
-
-    # 加密状态
-    if info['encrypted']:
-        table.add_row("加密状态", f"[pdf.encrypted]{Icons.ENCRYPT} 已加密[/]")
-    else:
-        table.add_row("加密状态", f"[success]{Icons.DECRYPT} 未加密[/]")
+    # 使用工业风格表格
+    columns = ["属性", "值"]
+    rows = [
+        ["文件名", info['filename']],
+        ["路径", f"[dim]{info['path']}[/]"],
+        ["文件大小", f"[size]{info['size']}[/]"],
+        ["页数", f"{info['pages']} 页"],
+        ["PDF 版本", info['version']],
+        ["加密状态", f"[pdf.encrypted]{Icons.ENCRYPT} 已加密[/]" if info['encrypted'] else f"[success]{Icons.DECRYPT} 未加密[/]"],
+    ]
 
     # 详细信息
     if detailed:
-        table.add_section()
-        table.add_row("[title]元数据[/]", "")
-        table.add_row("标题", info.get('title', '-'))
-        table.add_row("作者", info.get('author', '-'))
-        table.add_row("主题", info.get('subject', '-'))
-        table.add_row("关键词", info.get('keywords', '-'))
-        table.add_row("创建程序", info.get('creator', '-'))
-        table.add_row("PDF 生成器", info.get('producer', '-'))
-        table.add_row("创建时间", f"[date]{info.get('created', '-')}[/]")
-        table.add_row("修改时间", f"[date]{info.get('modified', '-')}[/]")
+        rows.append(["", ""])  # 空行分隔
+        rows.append(["[title]• 元数据[/]", ""])
+        rows.append(["标题", info.get('title', '-')])
+        rows.append(["作者", info.get('author', '-')])
+        rows.append(["主题", info.get('subject', '-')])
+        rows.append(["关键词", info.get('keywords', '-')])
+        rows.append(["创建程序", info.get('creator', '-')])
+        rows.append(["PDF 生成器", info.get('producer', '-')])
+        rows.append(["创建时间", f"[date]{info.get('created', '-')}[/]"])
+        rows.append(["修改时间", f"[date]{info.get('modified', '-')}[/]"])
 
-    console.print(table)
+    print_table_with_style(
+        title=f"{Icons.PDF} PDF 文件信息",
+        columns=columns,
+        rows=rows,
+        style="industrial"
+    )
+
+
+@app.command("system")
+def system_info(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="JSON 格式输出",
+    ),
+):
+    """
+    显示系统信息和依赖安装状态
+
+    用于诊断安装问题或提交 Bug 报告时附上系统信息。
+
+    示例:
+        pdfkit info system
+        pdfkit info system --json
+    """
+    import json as json_module
+    from .. import __version__
+
+    # 收集系统信息
+    sys_info = get_system_info()
+    
+    # 收集路径信息
+    paths = {
+        "config_dir": str(get_app_config_dir()),
+        "documents_dir": str(get_documents_dir()),
+        "cache_dir": str(get_cache_dir()),
+    }
+    
+    # 检查 Poppler
+    poppler = find_poppler_path()
+    paths["poppler_path"] = str(poppler) if poppler else None
+    
+    # 检查依赖
+    deps = check_dependencies()
+    
+    # JSON 输出
+    if json_output:
+        output = {
+            "pdfkit_version": __version__,
+            "system": sys_info,
+            "paths": paths,
+            "dependencies": {k: {"installed": v[0], "info": v[1]} for k, v in deps.items()},
+        }
+        console.print_json(json_module.dumps(output, ensure_ascii=False, indent=2))
+        return
+    
+    # 表格输出
+    # 系统信息表
+    sys_columns = ["属性", "值"]
+    sys_rows = [
+        ["PDFKit 版本", f"[success]{__version__}[/]"],
+        ["操作系统", f"[info]{sys_info['platform']}[/]"],
+        ["系统版本", sys_info['platform_version']],
+        ["架构", sys_info['architecture']],
+        ["Python 版本", f"[number]{sys_info['python_version']}[/]"],
+    ]
+
+    if sys_info.get('windows_edition'):
+        sys_rows.append(["Windows 版本", sys_info['windows_edition']])
+        sys_rows.append(["64-bit", "✓" if sys_info.get('is_64bit') else "✗"])
+    elif sys_info.get('macos_version'):
+        sys_rows.append(["macOS 版本", sys_info['macos_version']])
+
+    print_table_with_style(
+        title="🖥️ 系统信息",
+        columns=sys_columns,
+        rows=sys_rows,
+        style="industrial"
+    )
+
+    console.print()
+
+    # 路径信息表
+    path_columns = ["路径类型", "位置"]
+    path_rows = [
+        ["配置目录", f"[path]{paths['config_dir']}[/]"],
+        ["文档目录", f"[path]{paths['documents_dir']}[/]"],
+        ["缓存目录", f"[path]{paths['cache_dir']}[/]"],
+    ]
+
+    if paths['poppler_path']:
+        path_rows.append(["Poppler 路径", f"[success]{paths['poppler_path']}[/]"])
+    else:
+        path_rows.append(["Poppler 路径", "[warning]未找到[/]"])
+
+    print_table_with_style(
+        title="📁 配置路径",
+        columns=path_columns,
+        rows=path_rows,
+        style="industrial"
+    )
+
+    console.print()
+
+    # 依赖状态表
+    dep_columns = ["依赖", "状态", "信息"]
+    dep_rows = []
+
+    for name, (installed, info_text) in deps.items():
+        if installed:
+            status = f"[success]{Icons.SUCCESS}[/]"
+            info_display = f"[dim]{info_text}[/]"
+        else:
+            status = f"[error]{Icons.ERROR}[/]"
+            info_display = f"[warning]{info_text[:50]}...[/]" if len(info_text) > 50 else f"[warning]{info_text}[/]"
+
+        dep_rows.append([name, status, info_display])
+
+    print_table_with_style(
+        title="📦 可选依赖状态",
+        columns=dep_columns,
+        rows=dep_rows,
+        style="industrial"
+    )
+    
+    # 提示信息
+    console.print()
+    
+    missing_deps = [name for name, (installed, _) in deps.items() if not installed]
+    if missing_deps:
+        print_warning("以下可选依赖未安装:")
+        for dep in missing_deps:
+            console.print(f"  • {dep}", style="dim")
+        console.print()
+        print_info("安装可选依赖:")
+        # 使用 \\[ 来转义方括号，防止 Rich 把 [full] 当作样式标签
+        print_info("  pip install 'pdfkit-cli\\[full]'  # 安装所有可选依赖")
+        print_info("  pip install 'pdfkit-cli\\[weasyprint]'  # 仅安装 WeasyPrint")
+        
+        if sys_info['platform'] == 'Windows':
+            console.print()
+            print_info("Windows 用户请参阅: docs/windows-installation.md")
+    else:
+        print_success("所有可选依赖已安装！")
+

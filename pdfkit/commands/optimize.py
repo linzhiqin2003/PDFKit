@@ -7,11 +7,13 @@ import fitz  # PyMuPDF
 import pikepdf
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, print_warning, create_progress, Icons
+    console, print_success, print_info, print_warning, Icons, LiveProgress,
+    print_operation_summary_panel, print_structured_error
 )
 from ..utils.validators import validate_pdf_file, require_unlocked_pdf
 from ..utils.file_utils import resolve_path, format_size
 from ..utils.config import load_config
+import time
 
 # 创建 optimize 子应用
 app = typer.Typer(help="优化操作")
@@ -55,12 +57,41 @@ def compress_pdf(
         pdfkit optimize compress document.pdf -q low
     """
     if quality not in ("low", "medium", "high"):
-        print_error("质量必须是 low, medium 或 high")
+        print_structured_error(
+            title="无效的压缩质量",
+            error_message=f"质量 '{quality}' 不支持",
+            causes=[
+                "质量参数拼写错误",
+                "使用了不支持的选项"
+            ],
+            suggestions=[
+                "low: 最低质量，文件最小（压缩流 + 对象流 + 重新压缩）",
+                "medium: 中等质量（压缩流 + 保留对象流）",
+                "high: 高质量，文件较大（不压缩流）"
+            ]
+        )
         raise typer.Exit(1)
 
     if not validate_pdf_file(file):
-        print_error(f"文件不存在或不是有效的 PDF: {file}")
+        print_structured_error(
+            title="无效的 PDF 文件",
+            error_message=f"文件不存在或不是有效的 PDF: {file}",
+            causes=[
+                "文件路径拼写错误",
+                "文件已损坏",
+                "文件格式不是 PDF"
+            ],
+            suggestions=[
+                "检查文件路径是否正确",
+                "使用 pdfkit info 命令检查文件状态"
+            ]
+        )
         raise typer.Exit(1)
+
+    if not require_unlocked_pdf(file, "压缩"):
+        raise typer.Exit(1)
+
+    start_time = time.time()
 
     try:
         # 获取原始文件大小
@@ -72,50 +103,117 @@ def compress_pdf(
         else:
             output = resolve_path(output)
 
-        # 使用 pikepdf 进行压缩
-        pdf = pikepdf.open(file)
+        # 显示原始文件大小
+        print_info(f"原始大小: [size]{format_size(original_size)}[/]")
 
-        # 根据质量设置保存选项
-        if quality == "low":
-            # 最低质量，最小文件：压缩流 + 对象流 + 去除冗余
-            pdf.save(
-                output,
-                compress_streams=True,
-                object_stream_mode=pikepdf.ObjectStreamMode.generate,
-                recompress_flate=True,
-            )
-        elif quality == "medium":
-            # 中等质量
-            pdf.save(
-                output,
-                compress_streams=True,
-                object_stream_mode=pikepdf.ObjectStreamMode.preserve,
-            )
-        else:  # high
-            # 高质量：保持更多原始结构
-            pdf.save(
-                output,
-                compress_streams=False,
-                object_stream_mode=pikepdf.ObjectStreamMode.disable,
-            )
+        # 使用 pikepdf 进行压缩（带进度指示）
+        quality_names = {"low": "最低质量", "medium": "中等质量", "high": "高质量"}
+        with LiveProgress(f"压缩中 ({quality_names[quality]})", total=100) as progress:
+            progress.update(completed=20, detail="打开文件...")
 
-        pdf.close()
+            pdf = pikepdf.open(file)
+            progress.update(completed=40, detail="分析内容...")
+
+            # 根据质量设置保存选项
+            if quality == "low":
+                # 最低质量，最小文件：压缩流 + 对象流 + 去除冗余
+                progress.update(completed=60, detail="应用低质量压缩...")
+                pdf.save(
+                    output,
+                    compress_streams=True,
+                    object_stream_mode=pikepdf.ObjectStreamMode.generate,
+                    recompress_flate=True,
+                )
+            elif quality == "medium":
+                # 中等质量
+                progress.update(completed=60, detail="应用中等质量压缩...")
+                pdf.save(
+                    output,
+                    compress_streams=True,
+                    object_stream_mode=pikepdf.ObjectStreamMode.preserve,
+                )
+            else:  # high
+                # 高质量：保持更多原始结构
+                progress.update(completed=60, detail="应用高质量压缩...")
+                pdf.save(
+                    output,
+                    compress_streams=False,
+                    object_stream_mode=pikepdf.ObjectStreamMode.disable,
+                )
+
+            progress.update(completed=90, detail="保存文件...")
+            pdf.close()
+            progress.update(completed=100, detail="完成")
 
         # 获取压缩后大小
         compressed_size = output.stat().st_size
         reduction = (1 - compressed_size / original_size) * 100
 
-        print_success(f"压缩完成: [path]{output}[/]")
-        print_info(f"原始大小: [size]{format_size(original_size)}[/]")
-        print_info(f"压缩后: [size]{format_size(compressed_size)}[/]")
+        # 打印操作摘要
+        console.print()
+        duration = time.time() - start_time
+
+        # 使用前后对比表格
+        from rich.table import Table
+        from rich import box
+
+        table = Table(
+            title="压缩前后对比",
+            title_style="title",
+            border_style=box.HEAVY,
+            box=box.DOUBLE,
+            show_header=True,
+            header_style="bold cyan",
+            padding=(0, 2)
+        )
+        table.add_column("项目", style="emphasis", width=12)
+        table.add_column("值", style="text")
+
+        table.add_row("原始大小", f"[size]{format_size(original_size)}[/]")
+        table.add_row("压缩后", f"[size]{format_size(compressed_size)}[/]")
 
         if reduction > 0:
-            print_info(f"减少: [success]{reduction:.1f}%[/]")
+            table.add_row("压缩率", f"[success]{reduction:.1f}%[/]")
+            status = "成功"
         else:
-            print_info(f"文件大小增加了 {-reduction:.1f}%（可能已经是最优压缩）")
+            table.add_row("变化", f"[warning]{-reduction:.1f}% (增大)[/]")
+            status = "完成"
+
+        table.add_row("压缩质量", quality_names[quality])
+        console.print(table)
+
+        print_operation_summary_panel(
+            total=1,
+            success=1 if reduction > 0 else 0,
+            failed=0,
+            skipped=0,
+            duration=duration,
+            output_path=str(output)
+        )
+
+        if reduction <= 0:
+            console.print()
+            print_warning("文件大小未减少，可能原因:")
+            print_info("  • 原始文件已经是最优压缩")
+            print_info("  • 尝试使用更低的质量选项: --quality low")
 
     except Exception as e:
-        print_error(f"压缩失败: {e}")
+        print_structured_error(
+            title="压缩失败",
+            error_message=str(e),
+            causes=[
+                "PDF 文件可能已损坏",
+                "文件加密导致无法读取",
+                "磁盘空间不足",
+                "输出目录无写入权限"
+            ],
+            suggestions=[
+                "使用 pdfkit info 检查文件状态",
+                "检查磁盘空间: df -h",
+                "确认输出目录有写入权限",
+                "如果文件加密，先使用 pdfkit decrypt 解密"
+            ]
+        )
         raise typer.Exit(1)
 
 

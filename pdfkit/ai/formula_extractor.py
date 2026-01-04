@@ -54,6 +54,7 @@ class AIFormulaExtractor:
         inline: bool = False,
         output_format: str = "latex",
         dpi: int = 300,
+        progress_callback: Optional[callable] = None,
     ) -> str:
         """
         提取文档中的公式
@@ -65,6 +66,7 @@ class AIFormulaExtractor:
             inline: 是否使用行内公式格式
             output_format: 输出格式 (latex/mathml/json)
             dpi: 渲染 DPI
+            progress_callback: 进度回调函数，签名为 (current, total, description, advance)
 
         Returns:
             格式化的公式文本
@@ -79,11 +81,11 @@ class AIFormulaExtractor:
         # 处理文件
         if file_path.suffix.lower() == ".pdf":
             results = self._extract_from_pdf(
-                file_path, pages, prompt, dpi
+                file_path, pages, prompt, dpi, progress_callback
             )
         else:
             results = self._extract_from_image(
-                file_path, prompt
+                file_path, prompt, progress_callback
             )
 
         # 格式化输出
@@ -97,6 +99,7 @@ class AIFormulaExtractor:
         pages: Optional[List[int]],
         prompt: str,
         dpi: int,
+        progress_callback: Optional[callable] = None,
     ) -> List[Tuple[int, str]]:
         """从 PDF 中提取公式"""
         doc = fitz.open(file_path)
@@ -104,11 +107,20 @@ class AIFormulaExtractor:
         if pages is None:
             pages = list(range(doc.page_count))
 
+        total = len(pages)
         results = []
 
-        for page_num in pages:
+        for idx, page_num in enumerate(pages):
             page = doc[page_num]
+
+            # 更新进度 - 开始处理该页
+            if progress_callback:
+                progress_callback(idx, total, f"[black]渲染[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页[/]", False)
+
             image = pdf_page_to_image(page, dpi=dpi)
+
+            if progress_callback:
+                progress_callback(idx, total, f"[info]识别[/][black]第[/] [bold_text]{page_num + 1}[/] [black]页公式[/]", False)
 
             try:
                 response = self.ocr.ocr_image(image, prompt=prompt)
@@ -116,7 +128,13 @@ class AIFormulaExtractor:
                     results.append((page_num + 1, response))
             except Exception as e:
                 # 出错时跳过该页
+                if progress_callback:
+                    progress_callback(idx + 1, total, f"[error]第 {page_num + 1} 页失败[/]", True)
                 continue
+
+            # 完成该页
+            if progress_callback:
+                progress_callback(idx + 1, total, f"[success]完成第 {page_num + 1} 页[/]", True)
 
         doc.close()
         return results
@@ -125,6 +143,7 @@ class AIFormulaExtractor:
         self,
         file_path: Path,
         prompt: str,
+        progress_callback: Optional[callable] = None,
     ) -> List[Tuple[int, str]]:
         """从图片中提取公式"""
         image = Image.open(file_path)

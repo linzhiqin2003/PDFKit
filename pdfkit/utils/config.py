@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from functools import lru_cache
 
-# 配置文件路径
-CONFIG_DIR = Path.home() / ".pdfkit"
+from .platform import get_app_config_dir, get_documents_dir
+
+# 配置文件路径 (跨平台兼容)
+CONFIG_DIR = get_app_config_dir()
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 DEFAULT_CONFIG_FILE = Path(__file__).parent.parent / "templates" / "default_config.yaml"
 
@@ -46,7 +48,7 @@ def _get_default_config() -> Dict[str, Any]:
     """获取默认配置"""
     return {
         "defaults": {
-            "output_dir": str(Path.home() / "Documents" / "pdfkit_output"),
+            "output_dir": str(get_documents_dir() / "pdfkit_output"),
             "quality": "medium",
             "overwrite": False,
             "verbose": False,
