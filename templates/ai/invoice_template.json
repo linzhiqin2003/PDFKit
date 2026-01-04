@@ -1,0 +1,78 @@
+{
+  "name": "invoice",
+  "description": "增值税发票信息抽取模板",
+  "fields": [
+    {
+      "name": "invoice_code",
+      "label": "发票代码"
+    },
+    {
+      "name": "invoice_no",
+      "label": "发票号码",
+      "required": true
+    },
+    {
+      "name": "date",
+      "label": "开票日期",
+      "type": "date"
+    },
+    {
+      "name": "buyer_name",
+      "label": "购买方名称"
+    },
+    {
+      "name": "buyer_tax_no",
+      "label": "购买方税号"
+    },
+    {
+      "name": "seller_name",
+      "label": "销售方名称"
+    },
+    {
+      "name": "seller_tax_no",
+      "label": "销售方税号"
+    },
+    {
+      "name": "amount_without_tax",
+      "label": "不含税金额",
+      "type": "number"
+    },
+    {
+      "name": "tax_amount",
+      "label": "税额",
+      "type": "number"
+    },
+    {
+      "name": "total_amount",
+      "label": "价税合计",
+      "type": "number",
+      "required": true
+    },
+    {
+      "name": "items",
+      "label": "商品明细",
+      "type": "array",
+      "items": [
+        {
+          "name": "name",
+          "label": "名称"
+        },
+        {
+          "name": "quantity",
+          "label": "数量",
+          "type": "number"
+        },
+        {
+          "name": "unit_price",
+          "label": "单价",
+          "type": "number"
+        },
+        {
+          "name": "amount",
+          "label": "金额",
+          "type": "number"
+        }
+      ]
+    }
+  ]
+}

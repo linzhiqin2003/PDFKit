@@ -51,6 +51,26 @@ def _get_default_config() -> Dict[str, Any]:
             "overwrite": False,
             "verbose": False,
         },
+        "ai": {
+            "translate": {
+                "default_dpi": 200,
+                "poll_interval": 5,
+                "timeout": 120,
+                "upload_method": "base64",
+                "upload": {
+                    "base64": {},
+                    "local": {
+                        "port": 8000,
+                    },
+                    "oss": {
+                        "access_key_id": os.getenv("ALIYUN_ACCESS_KEY_ID", ""),
+                        "access_key_secret": os.getenv("ALIYUN_ACCESS_KEY_SECRET", ""),
+                        "endpoint": os.getenv("ALIYUN_OSS_ENDPOINT", "oss-cn-hangzhou.aliyuncs.com"),
+                        "bucket_name": os.getenv("ALIYUN_OSS_BUCKET", "pdfkit-temp"),
+                    },
+                },
+            },
+        },
         "ocr": {
             "api_key": os.getenv("DASHSCOPE_API_KEY", ""),
             "models": {

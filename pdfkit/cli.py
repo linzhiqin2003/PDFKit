@@ -150,6 +150,12 @@ def _print_usage():
         "ocr-layout 版面分析"
     )
 
+    # AI 功能
+    table.add_row(
+        "[bold green]✨ AI[/]",
+        "ai         智能抽取\n"
+    )
+
     # 批量处理
     table.add_row(
         "[bold green]📦 批量[/]",
@@ -196,6 +202,7 @@ from .commands.bookmark import app as bookmark_app
 from .commands.security import app as security_app
 from .commands.optimize import app as optimize_app
 from .commands.ocr import app as ocr_app
+from .commands.ai import app as ai_app
 from .commands.batch import app as batch_app
 app.add_typer(info_app, name="info")
 app.command(name="split")(split_cmd)
@@ -213,6 +220,7 @@ app.add_typer(bookmark_app, name="bookmark")
 app.add_typer(security_app, name="security")
 app.add_typer(optimize_app, name="optimize")
 app.add_typer(ocr_app, name="ocr")
+app.add_typer(ai_app, name="ai")
 app.add_typer(batch_app, name="batch")
 
 

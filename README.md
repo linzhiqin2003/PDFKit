@@ -18,6 +18,16 @@ PDFKit 是一个功能全面、使用简单、界面美观的 PDF 命令行处�
 pip install pdfkit-cli
 ```
 
+### 可选依赖
+
+某些功能需要额外的依赖包：
+
+| 功能 | 依赖 | 安装命令 |
+|------|------|---------|
+| AI 翻译 | `requests` | `pip install requests` |
+
+**注意**: AI 翻译功能（`ai translate` 命令）依赖 `requests` 库进行图像上传和下载。如果未安装，运行时会显示友好的安装提示。
+
 ## 快速开始
 
 ```bash
@@ -82,6 +92,12 @@ pdfkit ocr scan.pdf
 - `ocr` - 文字识别 (基于 Qwen3-VL)
 - `ocr-table` - 表格提取
 - `ocr-layout` - 版面分析
+
+### AI 智能处理
+- `ai extract` - 结构化信息抽取（发票、身份证等）
+- `ai translate` - PDF 文档翻译（默认 Markdown 模式，可编辑）
+- `ai formula` - 数学公式识别（LaTeX 输出）
+- `ai extract-images` - 智能图像提取（基于视觉检测）
 
 ### 批量处理
 - `batch` - 批量处理

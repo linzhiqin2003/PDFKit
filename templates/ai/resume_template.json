@@ -1,0 +1,77 @@
+{
+  "name": "resume",
+  "description": "个人简历信息抽取模板",
+  "fields": [
+    {
+      "name": "name",
+      "label": "姓名",
+      "required": true
+    },
+    {
+      "name": "gender",
+      "label": "性别"
+    },
+    {
+      "name": "birth_date",
+      "label": "出生日期",
+      "type": "date"
+    },
+    {
+      "name": "phone",
+      "label": "联系电话"
+    },
+    {
+      "name": "email",
+      "label": "电子邮箱"
+    },
+    {
+      "name": "address",
+      "label": "现居住地"
+    },
+    {
+      "name": "education",
+      "label": "学历",
+      "description": "最高学历，如本科、硕士、博士"
+    },
+    {
+      "name": "work_experience",
+      "label": "工作年限",
+      "type": "number",
+      "description": "工作年限，如3年、5年"
+    },
+    {
+      "name": "skills",
+      "label": "专业技能",
+      "type": "array",
+      "items": [
+        {
+          "name": "skill",
+          "label": "技能名称"
+        }
+      ]
+    },
+    {
+      "name": "work_history",
+      "label": "工作经历",
+      "type": "array",
+      "items": [
+        {
+          "name": "company",
+          "label": "公司名称"
+        },
+        {
+          "name": "position",
+          "label": "职位"
+        },
+        {
+          "name": "start_date",
+          "label": "开始时间"
+        },
+        {
+          "name": "end_date",
+          "label": "结束时间"
+        }
+      ]
+    }
+  ]
+}

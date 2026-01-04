@@ -1,0 +1,43 @@
+{
+  "name": "idcard",
+  "description": "中国居民身份证信息抽取模板",
+  "fields": [
+    {
+      "name": "name",
+      "label": "姓名",
+      "required": true
+    },
+    {
+      "name": "gender",
+      "label": "性别"
+    },
+    {
+      "name": "ethnicity",
+      "label": "民族"
+    },
+    {
+      "name": "birth_date",
+      "label": "出生日期",
+      "type": "date"
+    },
+    {
+      "name": "address",
+      "label": "住址"
+    },
+    {
+      "name": "id_number",
+      "label": "身份证号",
+      "required": true
+    },
+    {
+      "name": "issuing_authority",
+      "label": "签发机关",
+      "description": "背面信息"
+    },
+    {
+      "name": "valid_period",
+      "label": "有效期限",
+      "description": "背面信息"
+    }
+  ]
+}

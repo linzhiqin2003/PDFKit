@@ -18,6 +18,35 @@ fitz.TOOLS.mupdf_display_warnings(False)
 from ..utils.config import load_config
 
 
+def _clean_json_output(content: str) -> str:
+    """清理 JSON 输出，移除 markdown 代码块标记
+
+    Args:
+        content: 原始输出内容
+
+    Returns:
+        清理后的内容
+    """
+    if not content:
+        return content
+
+    # 移除可能的 markdown 代码块标记
+    # ```json ... ``` 或 ``` ... ```
+    content = content.strip()
+
+    # 移除开头的标记
+    if content.startswith("```json"):
+        content = content[7:]
+    elif content.startswith("```"):
+        content = content[3:]
+
+    # 移除结尾的标记
+    if content.endswith("```"):
+        content = content[:-3]
+
+    return content.strip()
+
+
 class OCRModel(str, Enum):
     """OCR 模型选择"""
     FLASH = "flash"   # 快速模型
@@ -135,7 +164,13 @@ class QwenVLOCR:
             ],
         )
 
-        return completion.choices[0].message.content
+        content = completion.choices[0].message.content
+
+        # 对于 JSON 格式输出，清理可能的 markdown 代码块标记
+        if output_format == OutputFormat.JSON:
+            content = _clean_json_output(content)
+
+        return content
 
     def ocr_table(self, image: Image.Image) -> str:
         """专门提取表格数据"""
@@ -214,7 +249,13 @@ class QwenVLOCR:
             ],
         )
 
-        return completion.choices[0].message.content
+        content = completion.choices[0].message.content
+
+        # 对于 JSON 格式输出，清理可能的 markdown 代码块标记
+        if output_format == OutputFormat.JSON:
+            content = _clean_json_output(content)
+
+        return content
 
     async def ocr_page_async(
         self,

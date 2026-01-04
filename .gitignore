@@ -70,7 +70,7 @@ batch_output/
 *.txt
 *.md
 !README.md
-.claude/
+!docs/**/*.md
 
 # Local configuration (keep .env.example)
 activate.sh
