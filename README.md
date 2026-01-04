@@ -85,6 +85,19 @@ Windows 64-bit 用户请参阅详细安装指南：[📖 Windows 安装指南](d
 pdfkit info system
 ```
 
+### 本地部署 (已克隆仓库)
+
+如果已经克隆了仓库，可以使用本地部署脚本：
+
+```bash
+# macOS/Linux
+./scripts/setup.sh
+
+# Windows PowerShell
+.\scripts\setup.ps1
+```
+
+
 ## 快速开始
 
 ```bash
