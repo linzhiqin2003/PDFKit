@@ -54,6 +54,22 @@ pip install 'pdfkit-cli[full]'
 
 ### Windows 安装
 
+#### 🚀 Windows 一键安装 (推荐)
+
+在 PowerShell 中运行：
+
+```powershell
+irm https://raw.githubusercontent.com/linzhiqin2003/pdfkit/main/scripts/install.ps1 | iex
+```
+
+该脚本会自动：
+- 安装 Python 3.12+ 和 Git (如未安装，需要 winget)
+- 克隆代码到 `~\.pdfkit-cli`
+- 创建虚拟环境并安装依赖
+- 配置 `pdfkit` 系统命令
+
+#### 手动安装
+
 Windows 64-bit 用户请参阅详细安装指南：[📖 Windows 安装指南](docs/windows-installation.md)
 
 主要注意事项：
