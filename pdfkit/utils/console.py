@@ -512,16 +512,22 @@ class LiveProgress:
 
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         if self.progress:
-            # 确保进度条显示完成状态
-            if self.task_id is not None:
-                # 强制设置为 100% 完成
-                self.progress.update(self.task_id, completed=self.total)
-                # 强制刷新一次以确保显示
-                self.progress.refresh()
-            # 使用 stop() 停止刷新线程（而不是 __exit__）
-            self.progress.stop()
+            try:
+                if self.task_id is not None:
+                    # 如果是中断，保持当前进度；否则显示完成
+                    if exc_type is KeyboardInterrupt:
+                        # 中断时保持当前进度，不强制设置为100%
+                        pass
+                    else:
+                        # 正常完成，设置为100%
+                        self.progress.update(self.task_id, completed=self.total)
+                    self.progress.refresh()
+                self.progress.stop()
+            except Exception:
+                # 如果 progress 已经关闭，忽略异常
+                pass
 
     def update(
         self,

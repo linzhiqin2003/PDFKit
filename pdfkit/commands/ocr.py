@@ -101,6 +101,7 @@ async def _process_ocr_async(
     dpi: int,
     prompt: Optional[str],
     output_format: "OutputFormat",
+    pages_to_process: int,
 ) -> list[dict]:
     """
     异步处理多个页面，带并发控制、进度反馈和错误处理
@@ -135,7 +136,7 @@ async def _process_ocr_async(
     )
 
     task_id = progress.add_task(
-        f"[cyan]{Icons.SEARCH}[/] OCR 识别中 (异步模式)...",
+        f"[cyan]{Icons.SEARCH}[/] OCR 识别中 (异步模式)... (剩余 {pages_to_process}/{pages_to_process} 页)",
         total=total_count
     )
 
@@ -147,7 +148,12 @@ async def _process_ocr_async(
         nonlocal completed_count
         async with progress_lock:
             completed_count += 1
-            progress.update(task_id, completed=completed_count)
+            remaining = pages_to_process - completed_count
+            progress.update(
+                task_id,
+                completed=completed_count,
+                description=f"[cyan]{Icons.SEARCH}[/] OCR 识别中 (异步模式)... (剩余 {remaining}/{pages_to_process} 页)"
+            )
 
     # 包装任务，在完成后更新计数
     async def wrapped_task(page_num: int):
@@ -359,16 +365,19 @@ def recognize(
         else:
             page_list = list(range(total_pages))
 
-        print_info(f"待识别页数: [number]{len(page_list)}[/] / {total_pages} 页")
+        pages_to_process = len(page_list)
+        print_info(f"待识别页数: [number]{pages_to_process}[/] / {pages_to_process} 页")
+        if pages_to_process < total_pages:
+            print_info(f"PDF 总页数: [number]{total_pages}[/] 页 (识别指定范围)")
 
         if async_mode:
-            print_info(f"模式: [info]异步处理[/] (并发识别 {len(page_list)} 页)")
+            print_info(f"模式: [info]异步处理[/] (并发识别 {pages_to_process} 页)")
 
         # OCR 识别
         if async_mode:
             # 异步处理模式
             results = asyncio.run(_process_ocr_async(
-                doc, page_list, ocr, dpi, prompt, format_enum
+                doc, page_list, ocr, dpi, prompt, format_enum, pages_to_process
             ))
         else:
             # 同步处理模式
@@ -376,11 +385,11 @@ def recognize(
 
             with create_progress() as progress:
                 task = progress.add_task(
-                    f"{Icons.SEARCH} OCR 识别中...",
-                    total=len(page_list)
+                    f"{Icons.SEARCH} OCR 识别中... (剩余 {pages_to_process}/{pages_to_process} 页)",
+                    total=pages_to_process
                 )
 
-                for page_num in page_list:
+                for idx, page_num in enumerate(page_list):
                     page = doc[page_num]
 
                     # 将页面渲染为图片
@@ -398,15 +407,20 @@ def recognize(
                         "text": text,
                     })
 
-                    progress.update(task, advance=1)
+                    # 更新进度，显示剩余页数
+                    remaining = pages_to_process - idx - 1
+                    progress.update(task, advance=1, description=f"{Icons.SEARCH} OCR 识别中... (剩余 {remaining}/{pages_to_process} 页)")
 
         doc.close()
 
         # 输出结果
         _output_results(results, format_enum, output)
 
-        print_success(f"OCR 识别完成！共识别 [number]{len(page_list)}[/] 页")
+        print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页")
 
+    except KeyboardInterrupt:
+        print_warning("\n⚠ OCR 识别已取消")
+        raise typer.Exit(130)
     except ValueError as e:
         print_error(str(e))
         raise typer.Exit(1)
