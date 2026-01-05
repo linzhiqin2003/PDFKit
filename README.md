@@ -18,12 +18,14 @@ PDFKit 是一个功能全面、使用简单、界面美观的 PDF 命令行处�
 
 如果您已经克隆了本仓库，可以通过以下脚本一键配置 CLI 工具：
 
+**macOS/Linux:**
 ```bash
-# macOS/Linux
 chmod +x scripts/setup.sh    # 添加可执行权限
 ./scripts/setup.sh
+```
 
-# Windows PowerShell
+**Windows PowerShell:**
+```powershell
 .\scripts\setup.ps1
 ```
 
@@ -82,7 +84,7 @@ pdfkit ocr scan.pdf
 - `extract text` - 提取文本
 - `extract images` - 提取图片
 
-### 页面操作 (9)
+### 页面操作 (8)
 - `split` - 拆分 PDF
 - `merge` - 合并 PDF
 - `merge dir` - 目录合并
