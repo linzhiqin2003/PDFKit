@@ -20,6 +20,7 @@ PDFKit 是一个功能全面、使用简单、界面美观的 PDF 命令行处�
 
 ```bash
 # macOS/Linux
+chmod +x scripts/setup.sh    # 添加可执行权限
 ./scripts/setup.sh
 
 # Windows PowerShell
