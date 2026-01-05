@@ -366,7 +366,7 @@ def recognize(
             page_list = list(range(total_pages))
 
         pages_to_process = len(page_list)
-        print_info(f"待识别页数: [number]{pages_to_process}[/] / {pages_to_process} 页")
+        print_info(f"待识别页数: [number]{pages_to_process}[/] 页")
         if pages_to_process < total_pages:
             print_info(f"PDF 总页数: [number]{total_pages}[/] 页 (识别指定范围)")
 
