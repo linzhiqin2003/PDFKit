@@ -80,6 +80,8 @@ batch_output/
 
 # Local configuration (keep .env.example)
 activate.sh
+install.sh
+install.ps
 claude_desktop_config.json
 
 # Claude Code settings (shared with repo, local settings excluded)
