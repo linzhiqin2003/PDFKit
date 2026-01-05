@@ -178,8 +178,9 @@ watermark:
 git clone https://github.com/linzhiqin2003/pdfkit
 cd pdfkit
 
-# 开发模式安装
-pip install -e ".[dev]"
+# 运行安装脚本
+chmod +x scripts/setup.sh
+./scripts/setup.sh
 
 # 运行测试
 pytest
