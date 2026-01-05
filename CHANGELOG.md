@@ -4,6 +4,18 @@ All notable changes to PDFKit will be documented in this file.
 
 ## [Unreleased]
 
+### Added - OCR 图像融合 (2026-01-05)
+
+- **OCR 图像融合**: `pdfkit ocr recognize` 新增 `--with-images` 参数，实现 OCR 与图像提取一体化。
+  - 支持双模式图像提取：
+    - `--image-method extract`（默认）：传统方法，极快免费，适合嵌入式图像 PDF
+    - `--image-method ai`：AI 智能方法，精准但收费，适合扫描件和复杂布局
+  - 在 Markdown 输出中自动插入图像引用（如 `![描述](images/page_1_img_1.png)`）
+  - `--image-types` 参数支持类型过滤（仅 AI 模式有效）
+  - 智能提示：传统方法未找到图像时，自动建议尝试 AI 方法
+  - **异步模式完整支持**：`--async` 与 `--with-images` 可同时使用，并发处理大文件更高效
+  - **提示词优化**：增强图像引用指令，禁止生成无效占位符，自动清理 `<!-- 图片无法识别 -->` 等无效标记
+
 ### Added - Windows 支持与系统诊断 (2026-01-04)
 
 - **Windows 64-bit 完整支持**: 全面适配 Windows 平台，解决路径、控制台和依赖问题。

@@ -68,8 +68,8 @@ pdfkit merge file1.pdf file2.pdf -o combined.pdf
 # 压缩 PDF
 pdfkit compress large.pdf -o small.pdf
 
-# OCR 识别
-pdfkit ocr scan.pdf
+# OCR 识别（含图像）
+pdfkit ocr document.pdf --with-images -f md -o result.md
 ```
 
 ## 命令分类
@@ -125,9 +125,29 @@ pdfkit ocr scan.pdf
 - `repair` - 修复 PDF
 
 ### OCR 功能 (3)
-- `ocr` - 文字识别
+- `ocr recognize` - 文字识别（支持 `--with-images` 提取图像）
 - `ocr table` - 表格提取
 - `ocr layout` - 版面分析
+
+**OCR 图像提取**：
+```bash
+# 默认：传统提取（快速、免费）
+pdfkit ocr recognize document.pdf --with-images -f md
+
+# AI 提取（智能、精准，支持扫描件）
+pdfkit ocr recognize document.pdf --with-images --image-method ai
+
+# AI 提取 + 类型过滤（图表、表格等）
+pdfkit ocr recognize document.pdf --with-images --image-method ai --image-types chart,table
+
+# 异步模式（大文件推荐）
+pdfkit ocr recognize large.pdf --async --with-images
+```
+
+| 提取方法 | 速度 | 成本 | 图像质量 | 类型识别 | 适用场景 |
+|---------|------|------|----------|----------|----------|
+| extract | ⚡ 秒级 | 💰 免费 | 原始 | ❌ | 电子文档 |
+| ai | 🐢 分钟级 | 💰 收费 | 渲染 | ✅ 7种 | 扫描件/复杂文档 |
 
 ### AI 智能处理 (4)
 - `ai extract` - 结构化信息抽取（发票、简历等）

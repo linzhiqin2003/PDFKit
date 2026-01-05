@@ -47,6 +47,206 @@ def _clean_json_output(content: str) -> str:
     return content.strip()
 
 
+def _clean_markdown_output(content: str) -> str:
+    """清理 Markdown 输出，移除可能的代码块包装并进行格式优化
+
+    模型有时会用 ```markdown ... ``` 包装输出，需要移除这些标记
+    以便生成干净的 Markdown 文档。
+
+    Args:
+        content: 原始输出内容
+
+    Returns:
+        清理后的 Markdown 内容
+    """
+    import re
+    
+    if not content:
+        return content
+
+    content = content.strip()
+
+    # 1. 移除开头的 markdown 代码块标记
+    markdown_prefixes = ["```markdown", "```md", "```Markdown", "```MD"]
+    for prefix in markdown_prefixes:
+        if content.startswith(prefix):
+            content = content[len(prefix):]
+            break
+    else:
+        # 如果不是特定语言标记，但以 ``` 开头
+        if content.startswith("```") and not content.startswith("```\n"):
+            newline_idx = content.find("\n")
+            if newline_idx != -1 and newline_idx < 20:
+                content = content[newline_idx:]
+        elif content.startswith("```\n") or content.startswith("```"):
+            content = content[3:]
+
+    # 2. 移除结尾的 ``` 标记
+    if content.rstrip().endswith("```"):
+        content = content.rstrip()[:-3]
+
+    content = content.strip()
+    
+    # 3. 清理无效的图像占位符
+    # 移除 ![xxx](<!-- 图片无法识别 -->) 这种无法渲染的占位符
+    content = re.sub(
+        r'!\[[^\]]*\]\(\s*<!--[^>]*-->\s*\)',
+        '',
+        content
+    )
+    
+    # 4. 将图片/表格坐标注释转换为空（不再生成无效占位符）
+    # 匹配: <!-- Image (x1, y1, x2, y2) --> 或 <!-- Table (x1, y1, x2, y2) -->
+    content = re.sub(
+        r'<!--\s*(Image|Table)\s*\([^)]+\)\s*-->',
+        '',
+        content
+    )
+    
+    # 5. 移除末尾单独的页码（一行只有数字的情况）
+    lines = content.split('\n')
+    while lines and re.match(r'^\s*\d+\s*$', lines[-1]):
+        lines.pop()
+    content = '\n'.join(lines)
+    
+    # 6. 清理多余的空行（超过2个连续空行合并为2个）
+    content = re.sub(r'\n{4,}', '\n\n\n', content)
+    
+    # 7. 清理行首行尾多余空格
+    lines = content.split('\n')
+    lines = [line.rstrip() for line in lines]
+    content = '\n'.join(lines)
+
+    return content.strip()
+
+
+# ============================================================================
+# 默认提示词
+# ============================================================================
+
+DEFAULT_PROMPTS = {
+    "text": "请识别并提取图片中的所有文字内容，保持原有的格式和布局。只输出识别到的文字，不要添加任何解释。",
+    
+    "markdown": (
+        "请识别图片中的所有文字内容，直接以 Markdown 格式输出。\n"
+        "\n"
+        "输出要求：\n"
+        "1. 直接输出纯 Markdown 内容，不要用代码块(```)包装\n"
+        "2. 标题处理：\n"
+        "   - 文章/论文标题用 # (包括副标题，合并为一行)\n"
+        "   - 章节标题(1, 2, 3...)用 ##\n"
+        "   - 子节标题(2.1, 2.2...)用 ###\n"
+        "   - 更深层次(2.1.1, 2.1.2...)用 ####\n"
+        "   - 小标题/粗体标题用 **文本**\n"
+        "3. 表格必须使用 Markdown 表格语法（不要用 LaTeX tabular 环境）\n"
+        "4. 数学公式用 LaTeX，行内 $...$，独立块 $$...$$\n"
+        "5. 图片/图表无法识别时，使用占位符格式：\n"
+        "   ![Figure X: 图表描述]()\n"
+        "6. 脚注使用上标格式，如 ²、³ 或 ${}^{n}$\n"
+        "7. 忽略单独的页码数字\n"
+        "8. 只输出识别的内容，不要添加任何解释"
+    ),
+    
+    # Markdown 提示词（带图像引用版本）
+    "markdown_with_images": (
+        "请识别图片中的所有文字内容，直接以 Markdown 格式输出。\n"
+        "\n"
+        "输出要求：\n"
+        "1. 直接输出纯 Markdown 内容，不要用代码块(```)包装\n"
+        "2. 标题处理：\n"
+        "   - 文章/论文标题用 # (包括副标题，合并为一行)\n"
+        "   - 章节标题(1, 2, 3...)用 ##\n"
+        "   - 子节标题(2.1, 2.2...)用 ###\n"
+        "   - 更深层次(2.1.1, 2.1.2...)用 ####\n"
+        "   - 小标题/粗体标题用 **文本**\n"
+        "3. 表格必须使用 Markdown 表格语法（不要用 LaTeX tabular 环境）\n"
+        "4. 数学公式用 LaTeX，行内 $...$，独立块 $$...$$\n"
+        "5. 脚注使用上标格式，如 ²、³ 或 ${}^{n}$\n"
+        "6. 忽略单独的页码数字\n"
+        "7. 只输出识别的内容，不要添加任何解释\n"
+        "\n"
+        "【关键规则 - 图像处理】：\n"
+        "- 我会提供本页已提取的图像列表和路径\n"
+        "- 当遇到图片/图表/表格图像时，必须使用我提供的路径\n"
+        "- 格式：![Figure X: 描述](images/page_X_img_Y.png)\n"
+        "- 严禁使用 <!-- 图片无法识别 --> 或空路径\n"
+        "- 如果没有提供图像路径，直接省略该图像引用"
+    ),
+    
+    "json": "请识别图片中的所有文字内容，以 JSON 格式输出。",
+    
+    "table": "请识别图片中的表格数据，并以 Markdown 表格格式输出。如果有多个表格，请依次输出。只输出 Markdown 表格，不要添加其他解释。",
+    
+    "layout": "请分析这张文档图片的版面结构，识别出标题、正文、表格等，以 JSON 格式输出结构化的版面分析结果。",
+}
+
+
+# ============================================================================
+# 图像融合 OCR 辅助函数
+# ============================================================================
+
+def build_prompt_with_images(
+    base_prompt: str,
+    images: List[dict],
+    image_dir: str = "images",
+) -> str:
+    """
+    构建包含图像引用信息的 OCR 提示词
+    
+    Args:
+        base_prompt: 基础提示词
+        images: 图像元数据列表，每项包含:
+            - file: 相对路径如 "images/page_1_img_1.png"
+            - type: 图像类型如 "chart", "photo" 等
+            - description: 图像描述（可选）
+            - bbox: 边界框坐标 [x1, y1, x2, y2]（可选）
+        image_dir: 图像目录名（用于生成相对路径）
+        
+    Returns:
+        包含图像信息的完整提示词
+    """
+    if not images:
+        return base_prompt
+    
+    # 构建图像列表说明
+    image_info_lines = []
+    for i, img in enumerate(images, 1):
+        img_type = img.get("type", "unknown")
+        img_file = img.get("file", "")
+        img_desc = img.get("description", "")
+        
+        # 提取文件名用于引用
+        if "/" in img_file:
+            relative_path = img_file
+        else:
+            relative_path = f"{image_dir}/{img_file}"
+        
+        desc_part = f" - {img_desc}" if img_desc else ""
+        image_info_lines.append(
+            f"  图像{i}: 类型={img_type}{desc_part}\n"
+            f"    引用路径: {relative_path}"
+        )
+    
+    image_list = "\n".join(image_info_lines)
+    
+    # 构建完整提示词
+    prompt_with_images = f"""{base_prompt}
+
+===== 本页已提取的图像资源 =====
+本页共有 {len(images)} 个图像，请按顺序使用：
+
+{image_list}
+
+===== 必须遵守的规则 =====
+1. 当文中出现图表/图片/表格图像时，必须使用上面提供的路径
+2. 按图像在页面中从上到下的顺序，依次使用 图像1、图像2...
+3. 格式示例：![Figure 1: 趋势图](images/page_1_img_1.png)
+4. 绝对禁止输出 "图片无法识别" 或空的图片链接
+5. 如果页面图像数量与文中图表数量不匹配，优先保证已有路径被使用"""
+
+    return prompt_with_images
+
+
 class OCRModel(str, Enum):
     """OCR 模型选择"""
     FLASH = "flash"   # 快速模型
@@ -137,12 +337,10 @@ class QwenVLOCR:
         if prompt:
             final_prompt = prompt
         else:
-            format_prompts = {
-                OutputFormat.TEXT: self.prompts.get("text", "请识别并提取图片中的所有文字内容，保持原有的格式和布局。只输出识别到的文字，不要添加任何解释。"),
-                OutputFormat.MARKDOWN: self.prompts.get("markdown", "请识别图片中的所有文字内容，并以 Markdown 格式输出。保持标题、列表、表格等结构。"),
-                OutputFormat.JSON: self.prompts.get("json", "请识别图片中的所有文字内容，以 JSON 格式输出。"),
-            }
-            final_prompt = format_prompts.get(output_format, format_prompts[OutputFormat.TEXT])
+            format_key = output_format.value  # "text", "md", or "json"
+            if format_key == "md":
+                format_key = "markdown"
+            final_prompt = self.prompts.get(format_key, DEFAULT_PROMPTS.get(format_key, DEFAULT_PROMPTS["text"]))
 
         # 调用 API
         completion = self.client.chat.completions.create(
@@ -169,17 +367,20 @@ class QwenVLOCR:
         # 对于 JSON 格式输出，清理可能的 markdown 代码块标记
         if output_format == OutputFormat.JSON:
             content = _clean_json_output(content)
+        # 对于 Markdown 格式输出，也需要清理代码块包装
+        elif output_format == OutputFormat.MARKDOWN:
+            content = _clean_markdown_output(content)
 
         return content
 
     def ocr_table(self, image: Image.Image) -> str:
         """专门提取表格数据"""
-        prompt = self.prompts.get("table", "请识别图片中的表格数据，并以 Markdown 表格格式输出。如果有多个表格，请依次输出。只输出 Markdown 表格，不要添加其他解释。")
+        prompt = self.prompts.get("table", DEFAULT_PROMPTS["table"])
         return self.ocr_image(image, prompt=prompt)
 
     def ocr_layout(self, image: Image.Image) -> str:
         """分析文档版面结构"""
-        prompt = self.prompts.get("layout", "请分析这张文档图片的版面结构，识别出标题、正文、表格等，以 JSON 格式输出结构化的版面分析结果。")
+        prompt = self.prompts.get("layout", DEFAULT_PROMPTS["layout"])
         return self.ocr_image(image, prompt=prompt, output_format=OutputFormat.JSON)
 
     # ========================================================================
@@ -222,12 +423,10 @@ class QwenVLOCR:
         if prompt:
             final_prompt = prompt
         else:
-            format_prompts = {
-                OutputFormat.TEXT: self.prompts.get("text", "请识别并提取图片中的所有文字内容，保持原有的格式和布局。只输出识别到的文字，不要添加任何解释。"),
-                OutputFormat.MARKDOWN: self.prompts.get("markdown", "请识别图片中的所有文字内容，并以 Markdown 格式输出。保持标题、列表、表格等结构。"),
-                OutputFormat.JSON: self.prompts.get("json", "请识别图片中的所有文字内容，以 JSON 格式输出。"),
-            }
-            final_prompt = format_prompts.get(output_format, format_prompts[OutputFormat.TEXT])
+            format_key = output_format.value  # "text", "md", or "json"
+            if format_key == "md":
+                format_key = "markdown"
+            final_prompt = self.prompts.get(format_key, DEFAULT_PROMPTS.get(format_key, DEFAULT_PROMPTS["text"]))
 
         # 调用异步 API (使用缓存的客户端)
         completion = await self._async_client.chat.completions.create(
@@ -254,6 +453,9 @@ class QwenVLOCR:
         # 对于 JSON 格式输出，清理可能的 markdown 代码块标记
         if output_format == OutputFormat.JSON:
             content = _clean_json_output(content)
+        # 对于 Markdown 格式输出，也需要清理代码块包装
+        elif output_format == OutputFormat.MARKDOWN:
+            content = _clean_markdown_output(content)
 
         return content
 
@@ -265,12 +467,23 @@ class QwenVLOCR:
         prompt: Optional[str] = None,
         output_format: OutputFormat = OutputFormat.TEXT,
         semaphore: Optional[asyncio.Semaphore] = None,
+        page_images: Optional[List[dict]] = None,
     ) -> Tuple[int, str]:
         """
         异步处理单个 PDF 页面，返回 (页面号, 识别结果)
 
         关键改进：传入doc引用而非page对象，确保页面渲染在获取信号量之后才进行，
         避免所有页面预先渲染导致内存暴涨。
+        
+        Args:
+            doc: PDF 文档对象
+            page_num: 页面号（0-based）
+            dpi: 渲染 DPI
+            prompt: 自定义提示词
+            output_format: 输出格式
+            semaphore: 并发控制信号量
+            page_images: 该页的图像元数据列表（用于图像融合 OCR）
+                [{"file": "images/page_1_img_1.png", "type": "chart", ...}]
         """
         # 获取信号量（控制并发数）
         if semaphore:
@@ -282,7 +495,13 @@ class QwenVLOCR:
             page = doc[page_num]
             img = pdf_page_to_image(page, dpi)
 
-            text = await self.ocr_image_async(img, prompt=prompt, output_format=output_format)
+            # 如果有图像信息，构建包含图像的提示词
+            final_prompt = prompt
+            if page_images and output_format == OutputFormat.MARKDOWN:
+                base_prompt = prompt or DEFAULT_PROMPTS.get("markdown_with_images", DEFAULT_PROMPTS["markdown"])
+                final_prompt = build_prompt_with_images(base_prompt, page_images, "images")
+
+            text = await self.ocr_image_async(img, prompt=final_prompt, output_format=output_format)
             return (page_num, text)
         finally:
             # 释放信号量

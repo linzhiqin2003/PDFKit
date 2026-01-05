@@ -6,9 +6,10 @@ import typer
 import fitz  # PyMuPDF
 import asyncio
 import sys
+import signal
 
 from ..utils.console import (
-    console, print_success, print_error, print_info, create_progress, Icons,
+    console, print_success, print_error, print_info, print_warning, create_progress, Icons,
     print_structured_error, print_security_warning
 )
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -17,7 +18,8 @@ from ..utils.validators import validate_pdf_file, validate_page_range, require_u
 from ..utils.file_utils import resolve_path
 from ..utils.config import get_config_value
 from ..core.ocr_handler import (
-    QwenVLOCR, OCRModel, OutputFormat, Region, pdf_page_to_image
+    QwenVLOCR, OCRModel, OutputFormat, Region, pdf_page_to_image,
+    build_prompt_with_images, DEFAULT_PROMPTS
 )
 
 # 创建 ocr 子应用
@@ -102,7 +104,8 @@ async def _process_ocr_async(
     prompt: Optional[str],
     output_format: "OutputFormat",
     pages_to_process: int,
-) -> list[dict]:
+    page_images_map: dict[int, list[dict]] | None = None,
+) -> tuple[list[dict], bool]:
     """
     异步处理多个页面，带并发控制、进度反馈和错误处理
 
@@ -112,6 +115,13 @@ async def _process_ocr_async(
     3. 确保页面渲染在获取信号量后才进行，控制内存
     4. 实时进度条显示（带转圈图标）
     5. 自动清理异步客户端资源
+    6. 支持图像融合 OCR（通过 page_images_map）
+
+    Args:
+        page_images_map: 页面图像映射 {page_num: [image_info]}，用于图像融合 OCR
+
+    Returns:
+        (results, interrupted): 结果列表和是否被中断的标志
     """
     # 获取配置的并发数（默认10）
     max_concurrent = get_config_value("ocr.concurrency", 10)
@@ -123,8 +133,9 @@ async def _process_ocr_async(
     total_count = len(page_list)
     progress_lock = asyncio.Lock()
     completed_count = 0
+    interrupted = False
 
-    # 创建自定义进度条（支持异步更新）
+    # 创建自定义进度条（使用 transient=True 避免重复显示）
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -132,7 +143,7 @@ async def _process_ocr_async(
         TaskProgressColumn(),
         TextColumn("({task.completed}/{task.total})"),
         console=console,
-        transient=False,  # 完成后保留显示
+        transient=True,  # 中断或完成后不保留
     )
 
     task_id = progress.add_task(
@@ -141,7 +152,7 @@ async def _process_ocr_async(
     )
 
     # 使用Live显示进度条
-    live = Live(progress, console=console)
+    live = Live(progress, console=console, transient=True)
 
     async def update_progress():
         """更新进度"""
@@ -157,7 +168,9 @@ async def _process_ocr_async(
 
     # 包装任务，在完成后更新计数
     async def wrapped_task(page_num: int):
-        result = await ocr.ocr_page_async(doc, page_num, dpi, prompt, output_format, semaphore)
+        # 获取该页的图像信息（如果有）
+        page_images = page_images_map.get(page_num) if page_images_map else None
+        result = await ocr.ocr_page_async(doc, page_num, dpi, prompt, output_format, semaphore, page_images)
         await update_progress()
         return result
 
@@ -205,16 +218,227 @@ async def _process_ocr_async(
             for page_num, text in successful_results
         ]
 
-        return results
+        return results, False
 
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         # 用户中断，停止 Live 显示
+        interrupted = True
         if live.is_started:
             live.stop()
-        raise
+        return [], True
     finally:
         # 清理异步客户端资源
         await ocr.close_async_client()
+
+
+# ============================================================================
+# 图像提取辅助函数
+# ============================================================================
+
+def _extract_images_traditional(
+    doc: fitz.Document,
+    page_list: list[int],
+    images_dir: Path,
+) -> dict[int, list[dict]]:
+    """
+    传统图像提取（默认方案）
+    
+    优点：极快（秒级）、免费（本地处理）、原始质量
+    缺点：只能提取嵌入的图像对象，无法处理扫描件，无类型识别
+    
+    Args:
+        doc: PDF 文档对象
+        page_list: 页面列表（0-based）
+        images_dir: 图像输出目录
+        
+    Returns:
+        页面图像映射 {page_num: [image_info]}
+    """
+    page_images_map = {}
+    global_image_counter = 0
+    
+    for page_num in page_list:
+        page = doc[page_num]
+        image_list = page.get_images(full=True)
+        
+        if not image_list:
+            continue
+        
+        page_images = []
+        for img_index, img in enumerate(image_list):
+            xref = img[0]
+            
+            try:
+                base_image = doc.extract_image(xref)
+                if not base_image:
+                    continue
+                    
+                # 检查图像数据
+                image_data = base_image.get("image")
+                if not image_data:
+                    continue
+                
+                # 检查尺寸（跳过太小的图像，如图标）
+                width = base_image.get("width", 0)
+                height = base_image.get("height", 0)
+                if width < 50 or height < 50:
+                    continue
+                
+                # 确定文件扩展名
+                ext = base_image.get("ext", "png")
+                if ext == "jpeg":
+                    ext = "jpg"
+                
+                # 保存图像
+                global_image_counter += 1
+                filename = f"page_{page_num + 1}_img_{global_image_counter}.{ext}"
+                output_path = images_dir / filename
+                
+                with open(output_path, 'wb') as f:
+                    f.write(image_data)
+                
+                page_images.append({
+                    "file": f"images/{filename}",
+                    "type": "image",  # 传统方法无类型识别
+                    "description": "",
+                    "bbox": [],
+                    "method": "extract",
+                    "size": [width, height],
+                })
+                
+            except Exception:
+                # 跳过无法提取的图像
+                continue
+        
+        if page_images:
+            page_images_map[page_num] = page_images
+    
+    return page_images_map
+
+
+def _extract_images_ai(
+    doc: fitz.Document,
+    page_list: list[int],
+    images_dir: Path,
+    dpi: int,
+    include_types: list[str] | None,
+    api_key: str | None,
+    pages_to_process: int,
+) -> dict[int, list[dict]]:
+    """
+    AI 图像提取（备选方案）
+    
+    优点：智能识别、支持扫描件、类型分类
+    缺点：较慢（分钟级）、收费（API 调用）、渲染质量
+    
+    Args:
+        doc: PDF 文档对象
+        page_list: 页面列表（0-based）
+        images_dir: 图像输出目录
+        dpi: 渲染 DPI
+        include_types: 图像类型过滤
+        api_key: API Key
+        pages_to_process: 待处理页数（用于进度显示）
+        
+    Returns:
+        页面图像映射 {page_num: [image_info]}
+    """
+    from ..ai.image_extractor import AIImageExtractor
+    from ..ai.image_detection_prompt import normalize_bbox_to_pixels
+    from PIL import Image
+    from rich.progress import TimeElapsedColumn
+    
+    # 使用 plus 模型进行图像检测（精度更高）
+    extractor = AIImageExtractor(model="plus", api_key=api_key)
+    
+    page_images_map = {}
+    total_images_extracted = 0
+    image_counter = 0
+    
+    # 创建进度条
+    img_progress = Progress(
+        SpinnerColumn(style="warning"),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(
+            complete_style="progress.bar.complete",
+            finished_style="warning",
+            bar_width=None,
+        ),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+        expand=True,
+        transient=True,
+    )
+    
+    try:
+        img_progress.start()
+        img_task = img_progress.add_task(
+            f"{Icons.IMAGE} AI 检测图像中... (剩余 {pages_to_process}/{pages_to_process} 页)",
+            total=pages_to_process
+        )
+        
+        for idx, page_num in enumerate(page_list):
+            page = doc[page_num]
+            
+            # 渲染页面
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = page.get_pixmap(matrix=mat)
+            page_image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            
+            # AI 检测图像
+            detected = extractor._detect_images(page_image, include_types, None)
+            
+            page_images = []
+            for img_info in detected:
+                bbox = img_info.get("bbox", [])
+                if not bbox:
+                    continue
+                
+                # 转换坐标
+                pixel_bbox = normalize_bbox_to_pixels(
+                    bbox, pix.width, pix.height, padding=5
+                )
+                
+                # 检查尺寸
+                width = pixel_bbox[2] - pixel_bbox[0]
+                height = pixel_bbox[3] - pixel_bbox[1]
+                if width < 50 or height < 50:
+                    continue
+                
+                # 裁切并保存
+                image_counter += 1
+                total_images_extracted += 1
+                filename = f"page_{page_num + 1}_img_{image_counter}.png"
+                output_file = images_dir / filename
+                
+                cropped = page_image.crop(pixel_bbox)
+                cropped.save(output_file, "PNG")
+                
+                # 记录图像信息
+                page_images.append({
+                    "file": f"images/{filename}",
+                    "type": img_info.get("type", "unknown"),
+                    "description": img_info.get("description", ""),
+                    "bbox": list(pixel_bbox),
+                    "method": "ai",
+                })
+            
+            if page_images:
+                page_images_map[page_num] = page_images
+            
+            # 更新进度
+            remaining = pages_to_process - idx - 1
+            img_progress.update(
+                img_task, 
+                advance=1,
+                description=f"{Icons.IMAGE} AI 检测图像中... (剩余 {remaining}/{pages_to_process} 页)"
+            )
+            
+    finally:
+        img_progress.stop()
+    
+    return page_images_map, total_images_extracted
 
 
 # ============================================================================
@@ -279,6 +503,22 @@ def recognize(
         "-a",
         help="启用异步处理模式（并发处理页面，可显著提升速度）",
     ),
+    with_images: bool = typer.Option(
+        False,
+        "--with-images",
+        "-i",
+        help="同时提取图像并在 Markdown 中引用（仅对 md 格式有效）",
+    ),
+    image_method: str = typer.Option(
+        "extract",
+        "--image-method",
+        help="图像提取方法: extract(传统快速,免费,默认) 或 ai(智能精准,收费)",
+    ),
+    image_types: Optional[str] = typer.Option(
+        None,
+        "--image-types",
+        help="图像类型过滤（仅 --image-method ai 时有效）: chart,photo,diagram,table,illustration,logo,screenshot",
+    ),
 ):
     """
     对 PDF 进行 OCR 文字识别
@@ -310,15 +550,42 @@ def recognize(
         # 使用异步模式加速处理 (多页并发识别)
         pdfkit ocr recognize document.pdf --async -o result.txt
 
+        # OCR 并提取图像（默认使用传统快速方法）
+        pdfkit ocr recognize document.pdf -f md --with-images -o result.md
+
+        # 使用 AI 智能提取图像（支持扫描件，精准但收费）
+        pdfkit ocr recognize document.pdf -f md --with-images --image-method ai -o result.md
+
+        # AI 提取 + 类型过滤
+        pdfkit ocr recognize document.pdf -f md --with-images --image-method ai --image-types chart,table -o result.md
+
     注意:
         如果不指定 -o/--output 参数，结果将直接输出到终端
         使用 > 重定向也可保存: pdfkit ocr recognize document.pdf > result.txt
         异步模式 (--async) 会并发处理多个页面，可显著提升处理速度
+        --with-images 选项仅在 -f md 格式下有效
+        --image-method extract: 快速免费，适合嵌入式图像的 PDF
+        --image-method ai: 智能精准，适合扫描件或复杂布局
     """
     # 验证参数
     model_enum = validate_ocr_model(model)
     format_enum = validate_output_format(output_format)
     region_enum = validate_region(region)
+
+    # 验证 --with-images 参数
+    if with_images and format_enum != OutputFormat.MARKDOWN:
+        print_warning("--with-images 选项仅在 -f md 格式下有效，已自动切换为 markdown 格式")
+        format_enum = OutputFormat.MARKDOWN
+    
+    # 解析图像类型过滤
+    include_types = None
+    if image_types:
+        include_types = [t.strip() for t in image_types.split(",") if t.strip()]
+        valid_types = {"chart", "photo", "diagram", "table", "illustration", "logo", "screenshot"}
+        invalid = [t for t in include_types if t not in valid_types]
+        if invalid:
+            print_warning(f"忽略无效的图像类型: {', '.join(invalid)}")
+            include_types = [t for t in include_types if t in valid_types]
 
     if not validate_pdf_file(file):
         print_structured_error(
@@ -376,17 +643,111 @@ def recognize(
         if async_mode:
             print_info(f"模式: [info]异步处理[/] (并发识别 {pages_to_process} 页)")
 
-        # OCR 识别
+        # ====================================================================
+        # 图像预提取阶段（如果启用 --with-images）
+        # ====================================================================
+        page_images_map = {}  # 页面号 -> 图像列表
+        images_dir = None
+        
+        if with_images:
+            # 验证 image_method 参数
+            if image_method not in ("extract", "ai"):
+                print_structured_error(
+                    title=f"无效的图像提取方法: {image_method}",
+                    error_message="指定的图像提取方法不存在",
+                    causes=["方法名称拼写错误"],
+                    suggestions=[
+                        "extract: 传统快速方法（默认，免费）",
+                        "ai: AI 智能方法（精准，收费）"
+                    ]
+                )
+                raise typer.Exit(1)
+            
+            # 如果使用传统方法但指定了 image_types，给出提示
+            if image_method == "extract" and image_types:
+                print_warning("--image-types 参数仅在 --image-method ai 时有效，已忽略")
+            
+            # 确定输出目录
+            if output:
+                output_path = Path(output)
+                if output_path.suffix:
+                    # 如果是文件路径，取其父目录
+                    base_dir = output_path.parent
+                else:
+                    base_dir = output_path
+            else:
+                # 没有指定输出，使用当前目录
+                base_dir = Path(".")
+            
+            images_dir = base_dir / "images"
+            images_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 根据方法选择提取方式
+            if image_method == "extract":
+                # 传统方法：快速、免费
+                print_info(f"使用传统方法提取图像（快速免费）...")
+                page_images_map = _extract_images_traditional(doc, page_list, images_dir)
+                total_images = sum(len(imgs) for imgs in page_images_map.values())
+                
+                if total_images > 0:
+                    print_success(f"图像提取完成！共提取 [number]{total_images}[/] 个图像")
+                else:
+                    print_info("传统方法未找到嵌入图像")
+                    print_info("提示: 如果是扫描件 PDF，可尝试 [command]--image-method ai[/] 进行智能提取")
+                    
+            else:
+                # AI 方法：智能、收费
+                print_info(f"使用 AI 方法提取图像（智能精准，将产生 API 费用）...")
+                if include_types:
+                    print_info(f"图像类型过滤: [info]{', '.join(include_types)}[/]")
+                
+                page_images_map, total_images = _extract_images_ai(
+                    doc, page_list, images_dir, dpi, include_types, api_key, pages_to_process
+                )
+                
+                if total_images > 0:
+                    print_success(f"AI 图像提取完成！共提取 [number]{total_images}[/] 个图像")
+                else:
+                    print_info("AI 方法未检测到图像")
+
+        # ====================================================================
+        # OCR 识别阶段
+        # ====================================================================
+        interrupted = False
         if async_mode:
-            # 异步处理模式
-            results = asyncio.run(_process_ocr_async(
-                doc, page_list, ocr, dpi, prompt, format_enum, pages_to_process
+            # 异步处理模式（现已支持图像融合）
+            results, interrupted = asyncio.run(_process_ocr_async(
+                doc, page_list, ocr, dpi, prompt, format_enum, pages_to_process,
+                page_images_map if with_images else None
             ))
-        else:
+            if interrupted:
+                doc.close()
+                print_warning(f"{Icons.WARNING} OCR 识别中... [yellow]进度中断...[/]")
+                raise typer.Exit(130)
+        
+        if not async_mode:
             # 同步处理模式
             results = []
+            # 使用 transient=True 的进度条，避免中断时重复显示
+            from rich.progress import TimeElapsedColumn
+            progress = Progress(
+                SpinnerColumn(style="info", finished_text="[success]✓[/]"),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(
+                    complete_style="progress.bar.complete",
+                    finished_style="success",
+                    bar_width=None,
+                ),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeElapsedColumn(),
+                console=console,
+                expand=True,
+                transient=True,  # 中断后消失，避免重复显示
+            )
+            task = None
 
-            with create_progress() as progress:
+            try:
+                progress.start()
                 task = progress.add_task(
                     f"{Icons.SEARCH} OCR 识别中... (剩余 {pages_to_process}/{pages_to_process} 页)",
                     total=pages_to_process
@@ -398,10 +759,17 @@ def recognize(
                     # 将页面渲染为图片
                     img = pdf_page_to_image(page, dpi)
 
+                    # 构建提示词（如果有图像信息，则融合）
+                    current_prompt = prompt
+                    if with_images and page_num in page_images_map:
+                        page_images = page_images_map[page_num]
+                        base_prompt = prompt or DEFAULT_PROMPTS.get("markdown_with_images", DEFAULT_PROMPTS["markdown"])
+                        current_prompt = build_prompt_with_images(base_prompt, page_images, "images")
+
                     # OCR 识别
                     text = ocr.ocr_image(
                         img,
-                        prompt=prompt,
+                        prompt=current_prompt,
                         output_format=format_enum,
                     )
 
@@ -414,15 +782,30 @@ def recognize(
                     remaining = pages_to_process - idx - 1
                     progress.update(task, advance=1, description=f"{Icons.SEARCH} OCR 识别中... (剩余 {remaining}/{pages_to_process} 页)")
 
+            except KeyboardInterrupt:
+                # 用户中断
+                interrupted = True
+            finally:
+                progress.stop()
+
+            if interrupted:
+                doc.close()
+                print_warning(f"{Icons.WARNING} OCR 识别中... [yellow]进度中断...[/]")
+                raise typer.Exit(130)
+
         doc.close()
 
         # 输出结果
         _output_results(results, format_enum, output)
 
-        print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页")
+        # 完成消息
+        if with_images and page_images_map:
+            print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页，图像已保存至 [path]{images_dir}[/]")
+        else:
+            print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页")
 
     except KeyboardInterrupt:
-        print_warning("\n⚠ OCR 识别已取消")
+        # 中断已在内部处理
         raise typer.Exit(130)
     except ValueError as e:
         print_error(str(e))
@@ -636,7 +1019,19 @@ def _output_results(results: list, output_format: OutputFormat, output_path: Opt
     if output_format == OutputFormat.JSON:
         import json
         content = json.dumps(results, ensure_ascii=False, indent=2)
+    elif output_format == OutputFormat.MARKDOWN:
+        # Markdown 格式：使用 HTML 注释作为分隔符，不影响渲染
+        # 只有多个页面时才添加分隔符
+        if len(results) == 1:
+            content = results[0]['text']
+        else:
+            parts = []
+            for r in results:
+                # 使用 HTML 注释标记页码，不影响 Markdown 渲染
+                parts.append(f"<!-- Page {r['page']} -->\n\n{r['text']}")
+            content = "\n\n---\n\n".join(parts)  # 用 Markdown 分隔线分隔各页
     else:
+        # TEXT 格式：使用明显的分隔符
         content = "\n\n".join([
             f"--- 第 {r['page']} 页 ---\n{r['text']}"
             for r in results
