@@ -207,11 +207,14 @@ async def _process_ocr_async(
 
         return results
 
+    except KeyboardInterrupt:
+        # 用户中断，停止 Live 显示
+        if live.is_started:
+            live.stop()
+        raise
     finally:
         # 清理异步客户端资源
         await ocr.close_async_client()
-        if live.is_started:
-            live.stop()
 
 
 # ============================================================================
