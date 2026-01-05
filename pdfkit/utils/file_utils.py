@@ -276,7 +276,7 @@ def get_file_info(file: Path) -> dict:
 def generate_ocr_output_paths(
     input_file: Path,
     output_spec: Optional[Path] = None,
-    output_format: OutputFormat = OutputFormat.TEXT,
+    output_format: Optional[Any] = None,
 ) -> tuple[Path, Path]:
     """
     为 OCR 功能生成输出路径（文件夹组织结构）
@@ -308,6 +308,10 @@ def generate_ocr_output_paths(
     """
     # 循环导入避免：在这里导入 OutputFormat
     from pdfkit.core.ocr_handler import OutputFormat
+
+    # 如果没有提供格式，使用 TEXT 作为默认值
+    if output_format is None:
+        output_format = OutputFormat.TEXT
 
     # 确定文件扩展名
     ext_map = {
