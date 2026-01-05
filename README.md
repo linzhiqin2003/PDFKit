@@ -14,20 +14,26 @@ PDFKit 是一个功能全面、使用简单、界面美观的 PDF 命令行处�
 
 ## 安装
 
-### 🚀 macOS 一键安装 (推荐)
+### 📦 一键配置 (推荐 - 已克隆仓库)
 
-在终端中运行以下命令，自动完成所有安装步骤：
+如果您已经克隆了本仓库，可以通过以下脚本一键配置 CLI 工具：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/linzhiqin2003/pdfkit/main/scripts/install.sh | bash
+# macOS/Linux
+./scripts/setup.sh
+
+# Windows PowerShell
+.\scripts\setup.ps1
 ```
 
-该脚本会自动：
-- 安装 Homebrew (如未安装)
-- 安装 Git 和 Python 3.12+
-- 克隆代码到 `~/.pdfkit-cli`
-- 创建虚拟环境并安装依赖
-- 配置 `pdfkit` 系统命令
+**脚本功能**：
+- ✅ 检查 Python 环境 (需要 3.10+)
+- ✅ 创建虚拟环境
+- ✅ 安装所有依赖
+- ✅ 配置系统命令 (`pdfkit`)
+- ✅ 自动添加到 PATH
+
+**安装位置**：`~/.pdfkit-cli` 或当前项目目录
 
 ### 基础安装 (pip)
 
@@ -52,23 +58,7 @@ pip install 'pdfkit-cli[full]'
 | 网页截图 | `playwright` | `pip install 'pdfkit-cli[playwright]'` | 需 `playwright install` |
 | 全部功能 | 以上所有 | `pip install 'pdfkit-cli[full]'` | - |
 
-### Windows 安装
-
-#### 🚀 Windows 一键安装 (推荐)
-
-在 PowerShell 中运行：
-
-```powershell
-irm https://raw.githubusercontent.com/linzhiqin2003/pdfkit/main/scripts/install.ps1 | iex
-```
-
-该脚本会自动：
-- 安装 Python 3.12+ 和 Git (如未安装，需要 winget)
-- 克隆代码到 `~\.pdfkit-cli`
-- 创建虚拟环境并安装依赖
-- 配置 `pdfkit` 系统命令
-
-#### 手动安装
+### Windows 手动安装
 
 Windows 64-bit 用户请参阅详细安装指南：[📖 Windows 安装指南](docs/windows-installation.md)
 
@@ -83,18 +73,6 @@ Windows 64-bit 用户请参阅详细安装指南：[📖 Windows 安装指南](d
 
 ```bash
 pdfkit info system
-```
-
-### 本地部署 (已克隆仓库)
-
-如果已经克隆了仓库，可以使用本地部署脚本：
-
-```bash
-# macOS/Linux
-./scripts/setup.sh
-
-# Windows PowerShell
-.\scripts\setup.ps1
 ```
 
 
