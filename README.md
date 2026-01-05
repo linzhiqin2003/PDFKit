@@ -36,29 +36,6 @@ chmod +x scripts/setup.sh    # 添加可执行权限
 
 **安装位置**：`~/.pdfkit-cli` 或当前项目目录
 
-### 基础安装 (pip)
-
-```bash
-pip install pdfkit-cli
-```
-
-### 完整安装 (包含所有可选功能)
-
-```bash
-pip install 'pdfkit-cli[full]'
-```
-
-### 可选依赖
-
-某些功能需要额外的依赖包：
-
-| 功能 | 依赖 | 安装命令 | 说明 |
-|------|------|---------|------|
-| PDF 转图片 | `pdf2image` + Poppler | `pip install 'pdfkit-cli[pdf2image]'` | 需额外安装 Poppler |
-| HTML 转 PDF | `weasyprint` + GTK | `pip install 'pdfkit-cli[weasyprint]'` | Windows 需 MSYS2 |
-| 网页截图 | `playwright` | `pip install 'pdfkit-cli[playwright]'` | 需 `playwright install` |
-| 全部功能 | 以上所有 | `pip install 'pdfkit-cli[full]'` | - |
-
 ### Windows 手动安装
 
 Windows 64-bit 用户请参阅详细安装指南：[📖 Windows 安装指南](docs/windows-installation.md)
