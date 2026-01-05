@@ -271,3 +271,70 @@ def get_file_info(file: Path) -> dict:
         "is_dir": file.is_dir(),
         "extension": file.suffix,
     }
+
+
+def generate_ocr_output_paths(
+    input_file: Path,
+    output_spec: Optional[Path] = None,
+    output_format: OutputFormat = OutputFormat.TEXT,
+) -> tuple[Path, Path]:
+    """
+    为 OCR 功能生成输出路径（文件夹组织结构）
+
+    Args:
+        input_file: 输入 PDF 文件路径
+        output_spec: 用户指定的输出路径（通过 -o 参数）
+            - None: 使用默认行为（与 PDF 同名的文件夹）
+            - Path with suffix: 视为文件夹路径（忽略 suffix）
+            - Path without suffix: 视为文件夹路径
+        output_format: 输出格式（决定文件扩展名）
+
+    Returns:
+        (output_file_path, images_dir_path)
+
+    Examples:
+        >>> # 默认: input = doc.pdf
+        >>> from pdfkit.core.ocr_handler import OutputFormat
+        >>> generate_ocr_output_paths(Path("doc.pdf"), None, OutputFormat.MARKDOWN)
+        (PosixPath('doc/doc.md'), PosixPath('doc/images'))
+
+        >>> # 指定文件夹: input = doc.pdf, output = myfolder
+        >>> generate_ocr_output_paths(Path("doc.pdf"), Path("myfolder"), OutputFormat.TEXT)
+        (PosixPath('myfolder/doc.txt'), PosixPath('myfolder/images'))
+
+        >>> # 嵌套路径: input = path/to/doc.pdf
+        >>> generate_ocr_output_paths(Path("path/to/doc.pdf"), None, OutputFormat.MARKDOWN)
+        (PosixPath('path/to/doc/doc.md'), PosixPath('path/to/doc/images'))
+    """
+    # 循环导入避免：在这里导入 OutputFormat
+    from pdfkit.core.ocr_handler import OutputFormat
+
+    # 确定文件扩展名
+    ext_map = {
+        OutputFormat.TEXT: ".txt",
+        OutputFormat.MARKDOWN: ".md",
+        OutputFormat.JSON: ".json",
+    }
+    ext = ext_map.get(output_format, ".txt")
+
+    # PDF 文件名（不含扩展名，保持特殊字符）
+    pdf_stem = input_file.stem  # "2406.05946v1(3)"
+
+    # 确定输出目录
+    if output_spec is None:
+        # 默认：在 PDF 同目录下创建同名文件夹
+        output_dir = input_file.parent / pdf_stem
+    else:
+        # -o 参数指定：使用该路径作为文件夹
+        output_dir = output_spec
+
+    # 创建输出目录
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # 生成输出文件路径
+    output_file = output_dir / f"{pdf_stem}{ext}"
+
+    # 生成图像目录路径
+    images_dir = output_dir / "images"
+
+    return output_file, images_dir

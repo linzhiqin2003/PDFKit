@@ -304,8 +304,9 @@ class QwenVLOCR:
         self.model_name = self.model_map[model]
         self.base_url = self.region_config[region]
 
-        # 获取提示词
-        self.prompts = ocr_config.get("prompts", {})
+        # 获取提示词（支持模型特定覆盖）
+        self.model = model  # 保存模型枚举
+        self.prompts = self._load_prompts(ocr_config, model)
 
         # 获取超时和重试配置
         self.timeout = ocr_config.get("timeout", 60)
@@ -318,6 +319,50 @@ class QwenVLOCR:
             timeout=self.timeout,
             max_retries=self.max_retries,
         )
+
+    def _load_prompts(self, ocr_config: dict, model: OCRModel) -> dict:
+        """
+        加载提示词，支持模型特定覆盖
+
+        Priority:
+        1. Model-specific: ocr.prompts.models.{model}.{format}
+        2. Generic: ocr.prompts.{format}
+        3. Hardcoded default: DEFAULT_PROMPTS.{format}
+
+        Args:
+            ocr_config: OCR 配置字典
+            model: 当前使用的模型
+
+        Returns:
+            提示词字典
+        """
+        config_prompts = ocr_config.get("prompts", {})
+        model_name = model.value  # "flash", "plus", or "ocr"
+
+        # 获取模型特定提示词配置
+        model_specific = config_prompts.get("models", {}).get(model_name, {})
+
+        # 合并提示词（模型特定 > 通用 > 硬编码默认）
+        final_prompts = {}
+
+        # 所有可能的格式
+        all_formats = ["text", "markdown", "markdown_with_images", "json", "table", "layout"]
+
+        for fmt in all_formats:
+            # 优先级 1: 模型特定提示词
+            if fmt in model_specific:
+                final_prompts[fmt] = model_specific[fmt]
+            # 优先级 2: 通用提示词
+            elif fmt in config_prompts:
+                final_prompts[fmt] = config_prompts[fmt]
+            # 优先级 3: 硬编码默认值
+            elif fmt in DEFAULT_PROMPTS:
+                final_prompts[fmt] = DEFAULT_PROMPTS[fmt]
+            # 如果都不存在，跳过
+            else:
+                continue
+
+        return final_prompts
 
     def ocr_image(
         self,

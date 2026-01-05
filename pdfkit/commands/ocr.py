@@ -15,7 +15,7 @@ from ..utils.console import (
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.live import Live
 from ..utils.validators import validate_pdf_file, validate_page_range, require_unlocked_pdf
-from ..utils.file_utils import resolve_path
+from ..utils.file_utils import resolve_path, generate_ocr_output_paths
 from ..utils.config import get_config_value
 from ..core.ocr_handler import (
     QwenVLOCR, OCRModel, OutputFormat, Region, pdf_page_to_image,
@@ -644,11 +644,19 @@ def recognize(
             print_info(f"模式: [info]异步处理[/] (并发识别 {pages_to_process} 页)")
 
         # ====================================================================
+        # 确定输出路径（文件夹组织结构）
+        # ====================================================================
+        output_file_path, images_dir = generate_ocr_output_paths(
+            input_file=file,
+            output_spec=Path(output) if output else None,
+            output_format=format_enum,
+        )
+
+        # ====================================================================
         # 图像预提取阶段（如果启用 --with-images）
         # ====================================================================
         page_images_map = {}  # 页面号 -> 图像列表
-        images_dir = None
-        
+
         if with_images:
             # 验证 image_method 参数
             if image_method not in ("extract", "ai"):
@@ -662,24 +670,12 @@ def recognize(
                     ]
                 )
                 raise typer.Exit(1)
-            
+
             # 如果使用传统方法但指定了 image_types，给出提示
             if image_method == "extract" and image_types:
                 print_warning("--image-types 参数仅在 --image-method ai 时有效，已忽略")
-            
-            # 确定输出目录
-            if output:
-                output_path = Path(output)
-                if output_path.suffix:
-                    # 如果是文件路径，取其父目录
-                    base_dir = output_path.parent
-                else:
-                    base_dir = output_path
-            else:
-                # 没有指定输出，使用当前目录
-                base_dir = Path(".")
-            
-            images_dir = base_dir / "images"
+
+            # 创建 images 目录
             images_dir.mkdir(parents=True, exist_ok=True)
             
             # 根据方法选择提取方式
@@ -796,13 +792,13 @@ def recognize(
         doc.close()
 
         # 输出结果
-        _output_results(results, format_enum, output)
+        _output_results(results, format_enum, output_file_path)
 
         # 完成消息
+        print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页")
+        print_info(f"结果文件: [path]{output_file_path}[/]")
         if with_images and page_images_map:
-            print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页，图像已保存至 [path]{images_dir}[/]")
-        else:
-            print_success(f"OCR 识别完成！共识别 [number]{len(results)}[/] 页")
+            print_info(f"图像文件夹: [path]{images_dir}[/]")
 
     except KeyboardInterrupt:
         # 中断已在内部处理
@@ -836,7 +832,7 @@ def extract_table(
         None,
         "--output",
         "-o",
-        help="输出文件路径",
+        help="输出文件夹路径（将在文件夹内创建与 PDF 同名的输出文件）",
     ),
     model: str = typer.Option(
         "plus",
@@ -907,10 +903,19 @@ def extract_table(
 
         doc.close()
 
+        # 确定输出路径
+        output_file_path, _ = generate_ocr_output_paths(
+            input_file=file,
+            output_spec=Path(output) if output else None,
+            output_format=OutputFormat.TEXT,
+        )
+
         # 输出结果
-        _output_results(results, OutputFormat.TEXT, output)
+        _output_results(results, OutputFormat.TEXT, output_file_path)
 
         print_success(f"表格提取完成！共处理 [number]{len(page_list)}[/] 页")
+        if output:
+            print_info(f"结果文件: [path]{output_file_path}[/]")
 
     except Exception as e:
         print_error(f"表格提取失败: {e}")
@@ -938,7 +943,7 @@ def analyze_layout(
         None,
         "--output",
         "-o",
-        help="输出文件路径",
+        help="输出文件夹路径（将在文件夹内创建与 PDF 同名的 JSON 文件）",
     ),
     api_key: Optional[str] = typer.Option(
         None,
@@ -998,13 +1003,21 @@ def analyze_layout(
 
         doc.close()
 
+        # 确定输出路径
+        output_file_path, _ = generate_ocr_output_paths(
+            input_file=file,
+            output_spec=Path(output) if output else None,
+            output_format=OutputFormat.JSON,
+        )
+
         # 输出结果 (JSON 格式)
         import json
         content = json.dumps(results, ensure_ascii=False, indent=2)
 
         if output:
-            output.write_text(content, encoding="utf-8")
-            print_success(f"版面分析完成: [path]{output}[/]")
+            output_file_path.write_text(content, encoding="utf-8")
+            print_success(f"版面分析完成！共处理 [number]{len(page_list)}[/] 页")
+            print_info(f"结果文件: [path]{output_file_path}[/]")
         else:
             from ..utils.console import console as pdfkit_console
             pdfkit_console.print_json(content)
@@ -1046,3 +1059,78 @@ def _output_results(results: list, output_format: OutputFormat, output_path: Opt
             pdfkit_console.print_json(content)
         else:
             console.print(content)
+
+
+# ============================================================================
+# 提示词查看
+# ============================================================================
+
+@app.command("prompts")
+def show_prompts(
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="显示指定模型的提示词（flash/plus/ocr）",
+    ),
+):
+    """
+    显示当前使用的 OCR 提示词配置
+
+    示例:
+        # 查看通用提示词
+        pdfkit ocr prompts
+
+        # 查看 plus 模型的提示词
+        pdfkit ocr prompts -m plus
+
+    提示:
+        配置文件位置: ~/.pdfkit/config.yaml (macOS/Linux)
+                         %APPDATA%\\pdfkit\\config.yaml (Windows)
+    """
+    from ..utils.config import CONFIG_FILE
+    from ..core.ocr_handler import DEFAULT_PROMPTS
+
+    config = load_config()
+    ocr_config = config.get("ocr", {})
+    config_prompts = ocr_config.get("prompts", {})
+
+    console.print(f"\n[info]配置文件位置:[/] [path]{CONFIG_FILE}[/]\n")
+
+    if model:
+        # 显示特定模型的提示词
+        if model not in ["flash", "plus", "ocr"]:
+            print_error(f"无效的模型: {model}（可选: flash, plus, ocr）")
+            raise typer.Exit(1)
+
+        model_specific = config_prompts.get("models", {}).get(model, {})
+        if model_specific:
+            console.print(f"[info]{model.upper()} 模型专用提示词:[/]\n")
+            for fmt, prompt in model_specific.items():
+                console.print(f"  [info]{fmt}:[/]")
+                if len(prompt) > 100:
+                    console.print(f"    {prompt[:100]}...")
+                else:
+                    console.print(f"    {prompt}")
+                console.print()
+        else:
+            console.print(f"[info]{model.upper()} 模型使用通用提示词（无特定覆盖）[/]")
+            console.print(f"[dim]提示: 编辑 {CONFIG_FILE} 添加 models.{model} 配置[/]\n")
+    else:
+        # 显示通用提示词
+        console.print(f"[info]通用提示词（所有模型共用）:[/]\n")
+        for fmt, prompt in config_prompts.items():
+            if fmt == "models":
+                continue  # 跳过 models 配置
+            console.print(f"  [info]{fmt}:[/]")
+            if len(str(prompt)) > 100:
+                preview = str(prompt)[:100].replace("\n", " ")
+                console.print(f"    {preview}...")
+            else:
+                console.print(f"    {prompt}")
+            console.print()
+
+        # 提示模型特定配置
+        has_model_specific = any(config_prompts.get("models", {}).values())
+        if has_model_specific:
+            console.print(f"[info]提示: 使用 [command]-m <模型>[/] 查看模型特定提示词[/]\n")
