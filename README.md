@@ -72,61 +72,70 @@ pdfkit ocr scan.pdf
 
 ## 命令分类
 
-### 基础操作
+### 基础操作 (3)
 - `info` - 查看 PDF 信息
-- `extract-text` - 提取文本
-- `extract-images` - 提取图片
+- `info meta` - 查看元数据
+- `info system` - 系统诊断
 
-### 页面操作
+### 提取操作 (3)
+- `extract pages` - 提取页面
+- `extract text` - 提取文本
+- `extract images` - 提取图片
+
+### 页面操作 (9)
 - `split` - 拆分 PDF
 - `merge` - 合并 PDF
-- `extract` - 提取页面
+- `merge dir` - 目录合并
+- `merge interleave` - 交错合并
 - `delete` - 删除页面
 - `rotate` - 旋转页面
 - `reorder` - 重排页面
 - `reverse` - 反转顺序
 
-### 转换操作
+### 转换操作 (7)
 - `to-image` - PDF 转图片
 - `from-images` - 图片转 PDF
 - `to-word` - PDF 转 Word
 - `to-html` - PDF 转 HTML
 - `to-markdown` - PDF 转 Markdown
-- `from-url` - 网页转 PDF
 - `from-html` - HTML 转 PDF
+- `from-url` - 网页转 PDF
 
-### 编辑操作
+### 编辑操作 (8)
 - `watermark` - 添加水印
-- `header` - 添加页眉
-- `footer` - 添加页脚
-- `bookmark` - 添加书签
 - `crop` - 裁剪页面
 - `resize` - 调整大小
+- `header` - 添加页眉
+- `footer` - 添加页脚
+- `bookmark add` - 添加书签
+- `bookmark list` - 列出书签
+- `bookmark remove` - 删除书签
 
-### 安全操作
+### 安全操作 (4)
 - `encrypt` - 加密 PDF
 - `decrypt` - 解密 PDF
 - `protect` - 设置权限
 - `clean-meta` - 清除元数据
 
-### 优化操作
+### 优化操作 (3)
 - `compress` - 压缩 PDF
 - `optimize-images` - 优化图片
 - `repair` - 修复 PDF
 
-### OCR 功能
-- `ocr` - 文字识别 (基于 Qwen3-VL)
-- `ocr-table` - 表格提取
-- `ocr-layout` - 版面分析
+### OCR 功能 (3)
+- `ocr` - 文字识别
+- `ocr table` - 表格提取
+- `ocr layout` - 版面分析
 
-### AI 智能处理
-- `ai extract` - 结构化信息抽取（发票、身份证等）
-- `ai translate` - PDF 文档翻译（默认 Markdown 模式，可编辑）
-- `ai formula` - 数学公式识别（LaTeX 输出）
-- `ai extract-images` - 智能图像提取（基于视觉检测）
+### AI 智能处理 (4)
+- `ai extract` - 结构化信息抽取（发票、简历等）
+- `ai translate` - PDF 文档翻译（Markdown 模式）
+- `ai formula` - 数学公式识别（LaTeX）
+- `ai extract-images` - 智能图像提取
 
-### 批量处理
+### 批量处理 (3)
 - `batch` - 批量处理
+- `batch from-file` - 从任务文件批量处理
 - `watch` - 监控目录
 
 ## 配置
