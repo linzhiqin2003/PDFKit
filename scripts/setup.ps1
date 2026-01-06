@@ -1,40 +1,40 @@
 # ============================================================================
-# PDFKit 本地部署脚本 (Windows PowerShell)
+# PDFKit Local Deployment Script (Windows PowerShell)
 # ============================================================================
-# 用法: 在项目目录中运行 .\scripts\setup.ps1
+# Usage: Run .\scripts\setup.ps1 in the project directory
 # ============================================================================
 
 #Requires -Version 5.1
 
 $ErrorActionPreference = "Stop"
 
-# 配置
+# Configuration
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectDir = Split-Path -Parent $ScriptDir
 $VenvName = "pdfkit-env"
 $BinDir = "$env:USERPROFILE\.local\bin"
 
 # ============================================================================
-# 工具函数
+# Utility Functions
 # ============================================================================
 
 function Write-Info($message) {
-    Write-Host "ℹ " -NoNewline -ForegroundColor Blue
+    Write-Host "[INFO] " -NoNewline -ForegroundColor Blue
     Write-Host $message
 }
 
 function Write-Success($message) {
-    Write-Host "✓ " -NoNewline -ForegroundColor Green
+    Write-Host "[OK] " -NoNewline -ForegroundColor Green
     Write-Host $message
 }
 
-function Write-Warning($message) {
-    Write-Host "⚠ " -NoNewline -ForegroundColor Yellow
+function Write-Warn($message) {
+    Write-Host "[WARN] " -NoNewline -ForegroundColor Yellow
     Write-Host $message
 }
 
-function Write-Error($message) {
-    Write-Host "✗ " -NoNewline -ForegroundColor Red
+function Write-Err($message) {
+    Write-Host "[ERROR] " -NoNewline -ForegroundColor Red
     Write-Host $message
 }
 
@@ -50,16 +50,16 @@ function Test-Command($command) {
 }
 
 # ============================================================================
-# 安装步骤
+# Installation Steps
 # ============================================================================
 
 $TotalSteps = 4
 
 function Test-Python {
-    Write-Step 1 $TotalSteps "检查 Python..."
+    Write-Step 1 $TotalSteps "Checking Python..."
     
     if (-not (Test-Command "python")) {
-        Write-Error "未找到 Python，请先安装 Python 3.10+"
+        Write-Err "Python not found. Please install Python 3.10+"
         exit 1
     }
     
@@ -69,7 +69,7 @@ function Test-Python {
         $minor = [int]$Matches[2]
         
         if ($major -lt 3 -or ($major -eq 3 -and $minor -lt 10)) {
-            Write-Error "Python 版本过低 ($pythonVersion)，需要 3.10+"
+            Write-Err "Python version too old ($pythonVersion). Requires 3.10+"
             exit 1
         }
         
@@ -78,48 +78,49 @@ function Test-Python {
 }
 
 function New-Venv {
-    Write-Step 2 $TotalSteps "创建虚拟环境..."
+    Write-Step 2 $TotalSteps "Creating virtual environment..."
     
     $venvPath = Join-Path $ProjectDir $VenvName
     
     if (Test-Path $venvPath) {
-        Write-Warning "虚拟环境已存在: $VenvName"
-    } else {
+        Write-Warn "Virtual environment already exists: $VenvName"
+    }
+    else {
         Push-Location $ProjectDir
         python -m venv $VenvName
         Pop-Location
-        Write-Success "虚拟环境已创建: $VenvName"
+        Write-Success "Virtual environment created: $VenvName"
     }
 }
 
 function Install-Dependencies {
-    Write-Step 3 $TotalSteps "安装依赖..."
+    Write-Step 3 $TotalSteps "Installing dependencies..."
     
     $activateScript = Join-Path $ProjectDir "$VenvName\Scripts\Activate.ps1"
     . $activateScript
     
     Push-Location $ProjectDir
     
-    Write-Info "升级 pip..."
+    Write-Info "Upgrading pip..."
     python -m pip install --upgrade pip -q
     
-    Write-Info "安装 PDFKit..."
+    Write-Info "Installing PDFKit..."
     pip install -e . -q
     
     Pop-Location
     
-    Write-Success "依赖安装完成"
+    Write-Success "Dependencies installed"
 }
 
 function Set-Command {
-    Write-Step 4 $TotalSteps "配置系统命令..."
+    Write-Step 4 $TotalSteps "Configuring system command..."
     
-    # 创建 bin 目录
+    # Create bin directory
     if (-not (Test-Path $BinDir)) {
         New-Item -ItemType Directory -Path $BinDir -Force | Out-Null
     }
     
-    # 创建 wrapper 脚本
+    # Create wrapper script
     $wrapperPath = Join-Path $BinDir "pdfkit.cmd"
     $wrapperContent = @"
 @echo off
@@ -128,53 +129,54 @@ python -m pdfkit %*
 "@
     
     Set-Content -Path $wrapperPath -Value $wrapperContent -Encoding ASCII
-    Write-Success "命令脚本已创建: $wrapperPath"
+    Write-Success "Command script created: $wrapperPath"
     
-    # 添加到 PATH
+    # Add to PATH
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($userPath -notlike "*$BinDir*") {
-        Write-Info "添加 $BinDir 到用户 PATH..."
+        Write-Info "Adding $BinDir to user PATH..."
         [Environment]::SetEnvironmentVariable("Path", "$BinDir;$userPath", "User")
         $env:Path = "$BinDir;$env:Path"
-        Write-Success "PATH 已更新"
-    } else {
-        Write-Warning "$BinDir 已在 PATH 中"
+        Write-Success "PATH updated"
+    }
+    else {
+        Write-Warn "$BinDir is already in PATH"
     }
     
-    Write-Success "系统命令已配置"
+    Write-Success "System command configured"
 }
 
 function Write-SuccessBanner {
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
-    Write-Host "              ✓ PDFKit 部署成功！" -ForegroundColor Green
-    Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
+    Write-Host "              PDFKit Deployment Successful!" -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  项目目录: " -NoNewline -ForegroundColor Cyan
+    Write-Host "  Project Directory: " -NoNewline -ForegroundColor Cyan
     Write-Host $ProjectDir
-    Write-Host "  虚拟环境: " -NoNewline -ForegroundColor Cyan
+    Write-Host "  Virtual Environment: " -NoNewline -ForegroundColor Cyan
     Write-Host "$ProjectDir\$VenvName"
     Write-Host ""
-    Write-Host "  激活虚拟环境:" -ForegroundColor Yellow
+    Write-Host "  Activate virtual environment:" -ForegroundColor Yellow
     Write-Host "    . $ProjectDir\$VenvName\Scripts\Activate.ps1" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  使用命令:" -ForegroundColor Yellow
+    Write-Host "  Usage:" -ForegroundColor Yellow
     Write-Host "    pdfkit --help" -ForegroundColor Green
     Write-Host "    pdfkit info system" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  刷新 PATH (如需要):" -ForegroundColor Yellow
+    Write-Host "  Refresh PATH (if needed):" -ForegroundColor Yellow
     Write-Host '    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")' -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
 }
 
 # ============================================================================
-# 主程序
+# Main Program
 # ============================================================================
 
 function Main {
-    Write-Host "PDFKit 本地部署脚本" -ForegroundColor Cyan
-    Write-Host "项目目录: $ProjectDir" -ForegroundColor Yellow
+    Write-Host "PDFKit Local Deployment Script" -ForegroundColor Cyan
+    Write-Host "Project Directory: $ProjectDir" -ForegroundColor Yellow
     Write-Host ""
     
     try {
@@ -185,7 +187,7 @@ function Main {
         Write-SuccessBanner
     }
     catch {
-        Write-Error "部署失败: $_"
+        Write-Err "Deployment failed: $_"
         exit 1
     }
 }
