@@ -11,7 +11,7 @@ from PIL import Image
 import fitz  # PyMuPDF
 
 from .qwen_mt_translator import QwenMTTranslator
-from ..core.ocr_handler import QwenVLOCR
+from ..core.ocr_handler import QwenVLOCR, OCRModel, Region
 
 
 # VL模型识别提示词 - 保留Markdown结构
@@ -68,8 +68,12 @@ class AIMarkdownTranslator:
         """
         self.dpi = dpi
 
+        # 将字符串参数转换为枚举类型
+        model_enum = OCRModel(vl_model) if isinstance(vl_model, str) else vl_model
+        region_enum = Region(region) if isinstance(region, str) else region
+
         # VL模型用于文档识别
-        self.ocr = QwenVLOCR(model=vl_model, region=region, api_key=api_key)
+        self.ocr = QwenVLOCR(model=model_enum, region=region_enum, api_key=api_key)
 
         # 专用翻译模型
         self.translator = QwenMTTranslator(api_key=api_key, region=region, model=mt_model)
