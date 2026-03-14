@@ -95,9 +95,11 @@ def _image_to_data_url(img: Image.Image) -> str:
     return f"data:image/jpeg;base64,{b64}"
 
 
-def detect_watermarks(client: OpenAI, model: str, img: Image.Image) -> list[Detection]:
-    """用 VL 模型检测图中水印"""
+def detect_watermarks(client: OpenAI, model: str, img: Image.Image,
+                      prompt: str | None = None) -> list[Detection]:
+    """用 VL 模型检测图中水印，支持自定义 prompt"""
     data_url = _image_to_data_url(img)
+    detect_prompt = prompt or DETECT_PROMPT
 
     completion = client.chat.completions.create(
         model=model,
@@ -105,7 +107,7 @@ def detect_watermarks(client: OpenAI, model: str, img: Image.Image) -> list[Dete
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": data_url}},
-                {"type": "text", "text": DETECT_PROMPT},
+                {"type": "text", "text": detect_prompt},
             ],
         }],
     )

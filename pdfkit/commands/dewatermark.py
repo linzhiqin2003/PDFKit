@@ -110,6 +110,10 @@ def detect_cmd(
         None, "--pages", "-p",
         help="PDF 页码范围，如 '1-5' (仅 PDF 模式)",
     ),
+    prompt: Optional[str] = typer.Option(
+        None, "--prompt",
+        help="自定义水印检测提示词 (默认: 通用水印检测 prompt)",
+    ),
 ):
     """
     Step 1: 检测水印位置，输出标记图供检验
@@ -125,17 +129,20 @@ def detect_cmd(
 
         pdfkit dewatermark detect document.pdf --pages 1-3
 
+        pdfkit dewatermark detect photo.jpg --prompt "找出所有文字水印"
+
     检查标记图确认无误后，执行 remove 命令去水印:
 
-        pdfkit dewatermark remove photo.jpg_marked/
+        pdfkit dewatermark remove photo_marked/
     """
     from PIL import Image as PILImage
     from ..core.watermark_remover import (
-        _build_client, detect_watermarks, parse_page_range,
+        _build_client, detect_watermarks, parse_page_range, DETECT_PROMPT,
     )
     import fitz
 
     vl_model = MODEL_MAP.get(model, model)
+    custom_prompt = prompt  # None 时 detect_watermarks 使用内置 DETECT_PROMPT
     file = resolve_path(file)
     is_pdf = file.is_file() and file.suffix.lower() == ".pdf"
 
@@ -170,7 +177,7 @@ def detect_cmd(
             page_img = PILImage.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
             console.print(f"\n  第 {page_num}/{total} 页...")
-            dets = detect_watermarks(client, vl_model, page_img)
+            dets = detect_watermarks(client, vl_model, page_img, prompt=custom_prompt)
 
             page_key = f"page_{page_num:03d}"
             if dets:
@@ -199,7 +206,7 @@ def detect_cmd(
         for img_path in images:
             console.print(f"\n  {img_path.name}...")
             pil_img = PILImage.open(img_path).convert("RGB")
-            dets = detect_watermarks(client, vl_model, pil_img)
+            dets = detect_watermarks(client, vl_model, pil_img, prompt=custom_prompt)
 
             if dets:
                 console.print(f"    检测到 {len(dets)} 个水印:")
