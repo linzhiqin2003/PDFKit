@@ -262,9 +262,10 @@ class OutputFormat(str, Enum):
 
 
 class Region(str, Enum):
-    """API 地域"""
+    """API 地域/提供商"""
     BEIJING = "beijing"
     SINGAPORE = "singapore"
+    OPENROUTER = "openrouter"
 
 
 class QwenVLOCR:
@@ -280,29 +281,43 @@ class QwenVLOCR:
         config = load_config()
         ocr_config = config.get("ocr", {})
 
-        # 获取 API Key
-        self.api_key = api_key or ocr_config.get("api_key") or os.getenv("DASHSCOPE_API_KEY")
-        if not self.api_key:
-            raise ValueError(
-                "API Key 未配置。请设置环境变量 DASHSCOPE_API_KEY 或使用 --api-key 参数\n"
-                "获取 API Key: https://help.aliyun.com/zh/model-studio/get-api-key"
-            )
-
-        # 获取模型映射
-        self.model_map = ocr_config.get("models", {
-            "flash": "qwen3-vl-flash",
-            "plus": "qwen3-vl-plus",
-            "ocr": "qwen-vl-ocr-latest",
-        })
-
         # 获取地域配置
         self.region_config = ocr_config.get("regions", {
             "beijing": "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "singapore": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            "openrouter": "https://openrouter.ai/api/v1",
         })
 
-        self.model_name = self.model_map[model]
         self.base_url = self.region_config[region]
+
+        # 获取 API Key 和模型映射 - 按提供商区分
+        if region == Region.OPENROUTER:
+            openrouter_cfg = ocr_config.get("openrouter", {})
+            self.api_key = api_key or openrouter_cfg.get("api_key") or os.getenv("OPENROUTER_API_KEY")
+            if not self.api_key:
+                raise ValueError(
+                    "OpenRouter API Key 未配置。请设置环境变量 OPENROUTER_API_KEY 或使用 --api-key 参数\n"
+                    "获取 API Key: https://openrouter.ai/keys"
+                )
+            self.model_map = openrouter_cfg.get("models", {
+                "flash": "qwen/qwen3-vl-8b-instruct",
+                "plus": "qwen/qwen3-vl-8b-instruct",
+                "ocr": "qwen/qwen3-vl-8b-instruct",
+            })
+        else:
+            self.api_key = api_key or ocr_config.get("api_key") or os.getenv("DASHSCOPE_API_KEY")
+            if not self.api_key:
+                raise ValueError(
+                    "API Key 未配置。请设置环境变量 DASHSCOPE_API_KEY 或使用 --api-key 参数\n"
+                    "获取 API Key: https://help.aliyun.com/zh/model-studio/get-api-key"
+                )
+            self.model_map = ocr_config.get("models", {
+                "flash": "qwen3-vl-flash",
+                "plus": "qwen3-vl-plus",
+                "ocr": "qwen-vl-ocr-latest",
+            })
+
+        self.model_name = self.model_map[model]
 
         # 获取提示词（支持模型特定覆盖）
         self.model = model  # 保存模型枚举

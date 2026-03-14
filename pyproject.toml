@@ -71,11 +71,19 @@ playwright = [
     "playwright>=1.40.0",
 ]
 
+# AI 水印去除 (需要 LaMa 模型: big-lama.pt)
+dewatermark = [
+    "torch>=2.0.0",
+    "opencv-python-headless>=4.8.0",
+]
+
 # 完整功能 (包含所有可选依赖)
 full = [
     "pdf2image>=1.16.0",
     "weasyprint>=60.0",
     "playwright>=1.40.0",
+    "torch>=2.0.0",
+    "opencv-python-headless>=4.8.0",
 ]
 
 # 开发依赖

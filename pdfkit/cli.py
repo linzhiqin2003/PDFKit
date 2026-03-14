@@ -93,7 +93,8 @@ def _print_usage():
     table.add_row(
         "[bold green]📋 基础操作[/]",
         "info       查看 PDF 信息\n"
-        "extract    提取内容 (text/images/tables/pages)"
+        "extract    提取内容 (text/images/tables/pages)\n"
+        "search     搜索文本内容"
     )
 
     # 页面操作
@@ -120,11 +121,12 @@ def _print_usage():
     # 编辑操作
     table.add_row(
         "[bold green]✏️ 编辑[/]",
-        "watermark  添加水印\n"
-        "header     添加页眉\n"
-        "footer     添加页脚\n"
-        "crop       裁剪页面\n"
-        "resize     调整大小"
+        "watermark    添加水印\n"
+        "dewatermark  AI 去水印 (图片/PDF)\n"
+        "header       添加页眉\n"
+        "footer       添加页脚\n"
+        "crop         裁剪页面\n"
+        "resize       调整大小"
     )
 
     # 安全操作
@@ -198,12 +200,14 @@ from .commands.convert import app as convert_app
 from .commands.edit import app as edit_app
 from .commands.header import app as header_app
 from .commands.footer import app as footer_app
+from .commands.search import search as search_cmd
 from .commands.bookmark import app as bookmark_app
 from .commands.security import app as security_app
 from .commands.optimize import app as optimize_app
 from .commands.ocr import app as ocr_app
 from .commands.ai import app as ai_app
 from .commands.batch import app as batch_app
+from .commands.dewatermark import app as dewatermark_app
 app.add_typer(info_app, name="info")
 app.command(name="split")(split_cmd)
 app.add_typer(merge_app, name="merge")
@@ -222,6 +226,8 @@ app.add_typer(optimize_app, name="optimize")
 app.add_typer(ocr_app, name="ocr")
 app.add_typer(ai_app, name="ai")
 app.add_typer(batch_app, name="batch")
+app.add_typer(dewatermark_app, name="dewatermark")
+app.command(name="search")(search_cmd)
 
 
 def run():

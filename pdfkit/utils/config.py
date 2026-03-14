@@ -83,6 +83,15 @@ def _get_default_config() -> Dict[str, Any]:
             "regions": {
                 "beijing": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                 "singapore": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                "openrouter": "https://openrouter.ai/api/v1",
+            },
+            "openrouter": {
+                "api_key": os.getenv("OPENROUTER_API_KEY", ""),
+                "models": {
+                    "flash": "qwen/qwen3-vl-8b-instruct",
+                    "plus": "qwen/qwen3-vl-8b-instruct",
+                    "ocr": "qwen/qwen3-vl-8b-instruct",
+                },
             },
             "default_model": "flash",
             "default_region": "beijing",

@@ -4,6 +4,11 @@ All notable changes to PDFKit will be documented in this file.
 
 ## [Unreleased]
 
+### Added - 文本搜索命令 (2026-02-03)
+
+- **搜索 PDF 文本**: 新增 `pdfkit search` 命令，支持关键词/正则检索、页面范围筛选与 JSON 输出。
+- **高亮输出**: 关键词搜索支持生成高亮 PDF，便于人工复核。
+
 ### Added - OCR 图像融合 (2026-01-05)
 
 - **OCR 图像融合**: `pdfkit ocr recognize` 新增 `--with-images` 参数，实现 OCR 与图像提取一体化。

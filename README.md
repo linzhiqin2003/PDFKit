@@ -74,10 +74,11 @@ pdfkit ocr document.pdf --with-images -f md -o result.md
 
 ## 命令分类
 
-### 基础操作 (3)
+### 基础操作 (4)
 - `info` - 查看 PDF 信息
 - `info meta` - 查看元数据
 - `info system` - 系统诊断
+- `search` - 搜索文本内容
 
 ### 提取操作 (3)
 - `extract pages` - 提取页面
@@ -103,8 +104,10 @@ pdfkit ocr document.pdf --with-images -f md -o result.md
 - `from-html` - HTML 转 PDF
 - `from-url` - 网页转 PDF
 
-### 编辑操作 (8)
+### 编辑操作 (10)
 - `watermark` - 添加水印
+- `dewatermark image` - AI 去除图片水印
+- `dewatermark pdf` - AI 去除 PDF 水印
 - `crop` - 裁剪页面
 - `resize` - 调整大小
 - `header` - 添加页眉
@@ -179,6 +182,33 @@ compress:
 watermark:
   font_size: 48
   opacity: 0.3
+
+dewatermark:
+  model: flash          # flash (快速) 或 plus (精准)
+  lama_model: ~/.pdfkit/models/big-lama.pt
+```
+
+### AI 水印去除
+
+去除图片/PDF 中的平台水印（小红书、抖音等），基于 Qwen3-VL 定位 + LaMa 修复：
+
+```bash
+# 安装额外依赖
+pip install pdfkit-cli[dewatermark]
+
+# 下载 LaMa 模型 (196MB, 一次性)
+mkdir -p ~/.pdfkit/models
+wget -O ~/.pdfkit/models/big-lama.pt \
+  https://github.com/enesmsahin/simple-lama-inpainting/releases/download/v0.1.0/big-lama.pt
+
+# 图片去水印
+pdfkit dewatermark image photo.jpg
+pdfkit dewatermark image photos/              # 批量
+pdfkit dewatermark image photo.jpg -m plus    # 用 plus 模型
+
+# PDF 去水印
+pdfkit dewatermark pdf document.pdf
+pdfkit dewatermark pdf document.pdf --pages 1-5 --dpi 200
 ```
 
 ---
@@ -200,7 +230,7 @@ PDFKit 还提供了 [MCP (Model Context Protocol)](https://modelcontextprotocol.
 
 | 分类 | 工具数 | 功能 |
 |------|--------|------|
-| 信息查看 | 3 | 获取 PDF 信息、页数、元数据 |
+| 信息查看 | 4 | 获取 PDF 信息、页数、元数据、搜索 |
 | 页面操作 | 8 | 合并、拆分、提取页面/文本/图片 |
 | 转换操作 | 9 | PDF 与图片/Word/HTML/Markdown/网页互转 |
 | 编辑操作 | 5 | 添加水印、页眉页脚、裁剪、调整大小 |
@@ -248,6 +278,13 @@ Claude: 我来压缩文件... [调用 pdfkit_compress_pdf]
 ---
 
 ## 更新日志
+
+### v0.9.0 (2026-03-14)
+- **AI 水印去除**: 新增 `dewatermark image` / `dewatermark pdf` 命令
+  - Qwen3-VL 自动定位水印 + LaMa inpainting 修复
+  - 支持图片（单张/批量）和 PDF（逐页处理）
+  - 局部裁剪优化，CPU 服务器也能高效运行
+  - 默认 flash 模型（快速），可选 plus（精准）
 
 ### v0.8.1 (2026-01-04)
 - **Windows 支持**: 全面适配 Windows 64-bit 平台
